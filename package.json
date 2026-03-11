@@ -1,0 +1,47 @@
+{
+  "name": "l402-mcp",
+  "version": "0.1.0",
+  "description": "L402 client MCP - AI agents discover, pay for, and consume any L402-gated API",
+  "type": "module",
+  "bin": {
+    "l402-mcp": "./build/index.js"
+  },
+  "main": "./build/index.js",
+  "exports": {
+    ".": "./build/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "start": "node build/index.js",
+    "start:http": "TRANSPORT=http node build/index.js"
+  },
+  "dependencies": {
+    "@cashu/cashu-ts": "^2.5.0",
+    "@modelcontextprotocol/sdk": "^1.26.0",
+    "bolt11": "^1.4.1",
+    "cors": "^2.8.5",
+    "express": "^4.21.0",
+    "nostr-tools": "^2.12.0",
+    "qrcode": "^1.5.4",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.0.0",
+    "@types/qrcode": "^1.5.5",
+    "typescript": "^5.7.0",
+    "vitest": "^4.0.18"
+  },
+  "keywords": ["mcp", "l402", "lightning", "cashu", "nwc", "micropayments", "ai-agent"],
+  "author": "TheCryptoDonkey",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TheCryptoDonkey/l402-mcp.git"
+  },
+  "files": ["build", "LICENSE"],
+  "license": "MIT"
+}

@@ -1,0 +1,164 @@
+import { z } from 'zod'
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { CredentialStore } from '../store/credentials.js'
+import type { L402Challenge } from '../l402/parse.js'
+import type { DecodedInvoice } from '../l402/bolt11.js'
+import type { ServerInfo } from '../l402/detect.js'
+
+export interface FetchDeps {
+  credentialStore: CredentialStore
+  fetchFn: typeof fetch
+  payInvoice: (invoice: string) => Promise<{ paid: boolean; preimage?: string; method: string }>
+  maxAutoPaySats: number
+  parseL402: (header: string) => L402Challenge | null
+  decodeBolt11: (invoice: string) => DecodedInvoice
+  detectServer: (headers: Headers, body: unknown) => ServerInfo
+}
+
+export async function handleFetch(
+  args: { url: string; method?: string; headers?: Record<string, string>; body?: string; autoPay?: boolean },
+  deps: FetchDeps,
+) {
+  const origin = new URL(args.url).origin
+  const cred = deps.credentialStore.get(origin)
+  const reqHeaders: Record<string, string> = { ...args.headers }
+
+  // Step 1-2: Use stored credentials if available
+  if (cred) {
+    reqHeaders['Authorization'] = `L402 ${cred.macaroon}:${cred.preimage}`
+    deps.credentialStore.updateLastUsed(origin)
+  }
+
+  try {
+    const response = await deps.fetchFn(args.url, {
+      method: args.method ?? 'GET',
+      headers: reqHeaders,
+      body: args.body,
+    })
+
+    // Success - update balance and return
+    if (response.status !== 402) {
+      const balanceHeader = response.headers.get('x-credit-balance')
+      if (balanceHeader) {
+        deps.credentialStore.updateBalance(origin, parseInt(balanceHeader, 10))
+      }
+
+      const body = await response.text()
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({
+            status: response.status,
+            headers: Object.fromEntries(response.headers.entries()),
+            body,
+            creditsRemaining: balanceHeader ? parseInt(balanceHeader, 10) : null,
+            satsPaid: 0,
+          }, null, 2),
+        }],
+      }
+    }
+
+    // 402 response - parse the challenge
+    const authHeader = response.headers.get('www-authenticate') ?? ''
+    const challenge = deps.parseL402(authHeader)
+
+    let challengeBody: unknown = {}
+    try { challengeBody = await response.json() } catch {}
+
+    const decoded = challenge ? deps.decodeBolt11(challenge.invoice) : { costSats: null, paymentHash: null, expiry: 3600 }
+    const serverInfo = deps.detectServer(response.headers, challengeBody)
+
+    // Step 3: Credits exhausted (had credentials but got 402)
+    const creditsExhausted = !!cred
+
+    // Step 4: Auto-pay if within budget
+    const autoPay = args.autoPay ?? true
+    if (!creditsExhausted && autoPay && challenge && decoded.costSats !== null && decoded.costSats <= deps.maxAutoPaySats) {
+      const payResult = await deps.payInvoice(challenge.invoice)
+
+      if (payResult.paid && payResult.preimage) {
+        // Store credential and retry
+        deps.credentialStore.set(origin, {
+          macaroon: challenge.macaroon,
+          preimage: payResult.preimage,
+          paymentHash: decoded.paymentHash ?? '',
+          creditBalance: null,
+          storedAt: new Date().toISOString(),
+          lastUsed: new Date().toISOString(),
+          server: serverInfo.type === 'toll-booth' ? 'toll-booth' : null,
+        })
+
+        // Retry the request with new credentials
+        const retryHeaders: Record<string, string> = { ...args.headers }
+        retryHeaders['Authorization'] = `L402 ${challenge.macaroon}:${payResult.preimage}`
+
+        const retryResponse = await deps.fetchFn(args.url, {
+          method: args.method ?? 'GET',
+          headers: retryHeaders,
+          body: args.body,
+        })
+
+        const balanceHeader = retryResponse.headers.get('x-credit-balance')
+        if (balanceHeader) {
+          deps.credentialStore.updateBalance(origin, parseInt(balanceHeader, 10))
+        }
+
+        const retryBody = await retryResponse.text()
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify({
+              status: retryResponse.status,
+              headers: Object.fromEntries(retryResponse.headers.entries()),
+              body: retryBody,
+              creditsRemaining: balanceHeader ? parseInt(balanceHeader, 10) : null,
+              satsPaid: decoded.costSats,
+            }, null, 2),
+          }],
+        }
+      }
+    }
+
+    // Step 5: Return 402 challenge for agent decision
+    return {
+      content: [{
+        type: 'text' as const,
+        text: JSON.stringify({
+          status: 402,
+          costSats: decoded.costSats,
+          invoice: challenge?.invoice,
+          paymentHash: decoded.paymentHash,
+          creditsExhausted,
+          message: creditsExhausted
+            ? `Stored credentials for ${origin} have no remaining credits. New payment required.`
+            : `Payment of ${decoded.costSats} sats required. ${!autoPay ? 'autoPay disabled.' : `Exceeds MAX_AUTO_PAY_SATS (${deps.maxAutoPaySats}).`}`,
+        }, null, 2),
+      }],
+    }
+  } catch (err) {
+    return {
+      content: [{
+        type: 'text' as const,
+        text: JSON.stringify({ error: String(err) }),
+      }],
+      isError: true as const,
+    }
+  }
+}
+
+export function registerFetchTool(server: McpServer, deps: FetchDeps): void {
+  server.registerTool(
+    'l402_fetch',
+    {
+      description: 'Make an HTTP request with L402 payment support. Uses stored credentials if available. If a 402 challenge is received and autoPay is true and cost is within MAX_AUTO_PAY_SATS, pays automatically and retries. Returns creditsExhausted: true if existing credentials ran out.',
+      inputSchema: {
+        url: z.string().url().describe('The URL to request'),
+        method: z.string().optional().default('GET').describe('HTTP method'),
+        headers: z.record(z.string()).optional().describe('Additional request headers'),
+        body: z.string().optional().describe('Request body (for POST/PUT)'),
+        autoPay: z.boolean().optional().default(true).describe('Automatically pay if within MAX_AUTO_PAY_SATS budget'),
+      },
+    },
+    async (args) => handleFetch(args, deps),
+  )
+}

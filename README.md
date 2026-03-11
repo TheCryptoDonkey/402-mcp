@@ -1,0 +1,102 @@
+# l402-mcp
+
+[![MIT licence](https://img.shields.io/badge/licence-MIT-blue.svg)](./LICENSE)
+
+L402 client MCP that gives AI agents economic agency. Discover, pay for, and consume any L402-gated API - no human registration, no API keys, no middlemen.
+
+Works with **any L402-compliant server** (toll-booth, Aperture, or any future implementation), with bonus features when talking to a [toll-booth](https://github.com/TheCryptoDonkey/toll-booth) instance.
+
+## Quick start
+
+```bash
+npx l402-mcp
+```
+
+### Claude Desktop / Cursor
+
+Add to your MCP configuration:
+
+```json
+{
+  "mcpServers": {
+    "l402": {
+      "command": "npx",
+      "args": ["l402-mcp"],
+      "env": {
+        "NWC_URI": "nostr+walletconnect://...",
+        "MAX_AUTO_PAY_SATS": "1000"
+      }
+    }
+  }
+}
+```
+
+## Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `NWC_URI` | - | Nostr Wallet Connect URI for autonomous Lightning payments |
+| `CASHU_TOKENS` | - | Path to Cashu token store file |
+| `MAX_AUTO_PAY_SATS` | 1000 | Safety cap; payments above this require human confirmation |
+| `CREDENTIAL_STORE` | `~/.l402-mcp/credentials.json` | Persistent macaroon/credential storage |
+| `TRANSPORT` | `stdio` | Transport mode: `stdio` or `http` |
+| `PORT` | 3402 | HTTP server port (when `TRANSPORT=http`) |
+
+## Tools
+
+### Core L402 (any server)
+
+| Tool | Description |
+|------|-------------|
+| `l402_config` | Introspect payment capabilities (wallets, limits, credential count) |
+| `l402_discover` | Probe an endpoint to discover pricing without paying |
+| `l402_fetch` | HTTP request with L402 support; auto-pays if within budget |
+| `l402_pay` | Pay a specific invoice (NWC, Cashu, or human-in-the-loop) |
+| `l402_credentials` | List stored credentials and cached balances |
+| `l402_balance` | Check cached credit balance for a server |
+
+### toll-booth extensions
+
+| Tool | Description |
+|------|-------------|
+| `l402_buy_credits` | Browse and purchase volume discount tiers |
+| `l402_redeem_cashu` | Redeem Cashu tokens directly (avoids Lightning round-trip) |
+
+## Payment methods
+
+Three payment rails, tried in priority order:
+
+1. **NWC** (Nostr Wallet Connect) - fully autonomous; pays from your connected wallet
+2. **Cashu** - fully autonomous; melts ecash tokens to pay invoices
+3. **Human-in-the-loop** - presents QR code, polls for settlement
+
+The agent can override the method per-call, or you can configure only the methods you want.
+
+## How it works
+
+```
+Agent: "I need routing data from routing.trotters.cc"
+
+1. l402_config()
+   -> nwcConfigured: true, maxAutoPaySats: 1000
+
+2. l402_discover("https://routing.trotters.cc/api/route")
+   -> 10 sats/request, toll-booth detected, tiers available
+
+3. Agent reasons: "I need ~20 requests. The 500-sat tier
+   gives 555 credits. Better value."
+
+4. l402_buy_credits(url, amountSats=500)
+   -> Paid 500 sats, received 555 credits
+
+5. l402_fetch("https://routing.trotters.cc/api/route?from=...&to=...")
+   -> 200 OK, route data, 545 credits remaining
+```
+
+## Safety
+
+`MAX_AUTO_PAY_SATS` caps any single autonomous payment. Above this limit, the agent must ask the human for approval. The agent can read this limit via `l402_config` and factor it into purchasing decisions.
+
+## Licence
+
+[MIT](LICENSE)
