@@ -121,21 +121,24 @@ describe('getOrCreateKey', () => {
     )
   })
 
-  it('creates a new key and returns the same key on subsequent calls', async () => {
-    const key1 = await getOrCreateKey()
-    expect(key1).toBeInstanceOf(Buffer)
-    expect(key1.length).toBe(32)
+  it('creates a new key from keychain and returns keychain source', async () => {
+    const result = await getOrCreateKey()
+    expect(result.key).toBeInstanceOf(Buffer)
+    expect(result.key.length).toBe(32)
+    expect(result.source).toBe('keychain')
 
-    const key2 = await getOrCreateKey()
-    expect(key2.toString('hex')).toBe(key1.toString('hex'))
+    const result2 = await getOrCreateKey()
+    expect(result2.key.toString('hex')).toBe(result.key.toString('hex'))
+    expect(result2.source).toBe('keychain')
   })
 
-  it('falls back to file-based key when keytar throws', async () => {
+  it('falls back to file-based key when keytar throws and reports file source', async () => {
     const keytar = await import('keytar')
     vi.mocked(keytar.default.getPassword).mockRejectedValueOnce(new Error('keychain unavailable'))
 
-    const key = await getOrCreateKey()
-    expect(key).toBeInstanceOf(Buffer)
-    expect(key.length).toBe(32)
+    const result = await getOrCreateKey()
+    expect(result.key).toBeInstanceOf(Buffer)
+    expect(result.key.length).toBe(32)
+    expect(result.source).toBe('file')
   })
 })

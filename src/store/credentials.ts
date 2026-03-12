@@ -27,9 +27,11 @@ export class CredentialStore {
     // load() is now called from init()
   }
 
-  async init(): Promise<void> {
-    this.key = await getOrCreateKey()
+  async init(): Promise<{ keySource: 'keychain' | 'file' }> {
+    const result = await getOrCreateKey()
+    this.key = result.key
     this.load()
+    return { keySource: result.source }
   }
 
   private isExpired(cred: StoredCredential): boolean {

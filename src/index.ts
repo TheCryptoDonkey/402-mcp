@@ -39,7 +39,10 @@ const resilientFetch = createResilientFetch(fetch, {
 
 // Shared state
 const credentialStore = new CredentialStore(config.credentialStorePath)
-await credentialStore.init()
+const { keySource } = await credentialStore.init()
+if (keySource === 'file') {
+  console.error('Warning: encryption key stored on disk (OS keychain unavailable). Credentials are encrypted but the key is accessible to anyone with file access.')
+}
 const cashuTokenStore = config.cashuTokensPath ? new CashuTokenStore(config.cashuTokensPath) : undefined
 if (cashuTokenStore) await cashuTokenStore.init()
 const challengeCache = new ChallengeCache()

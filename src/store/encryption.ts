@@ -18,6 +18,11 @@ export interface EncryptedPayload {
   ciphertext: string
 }
 
+export interface KeyResult {
+  key: Buffer
+  source: 'keychain' | 'file'
+}
+
 export function encrypt(plaintext: string, key: Buffer): EncryptedPayload {
   const iv = randomBytes(IV_BYTES)
   const cipher = createCipheriv(ALGORITHM, key, iv)
@@ -59,16 +64,16 @@ function loadOrCreateFallbackKey(): Buffer {
   return newKey
 }
 
-export async function getOrCreateKey(): Promise<Buffer> {
+export async function getOrCreateKey(): Promise<KeyResult> {
   try {
     const keytar = await import('keytar')
     const existing = await keytar.default.getPassword(SERVICE, ACCOUNT)
-    if (existing) return Buffer.from(existing, 'hex')
+    if (existing) return { key: Buffer.from(existing, 'hex'), source: 'keychain' }
     const newKey = randomBytes(32)
     await keytar.default.setPassword(SERVICE, ACCOUNT, newKey.toString('hex'))
-    return newKey
+    return { key: newKey, source: 'keychain' }
   } catch {
     console.error('Warning: OS keychain unavailable; encryption key stored in file with restricted permissions')
-    return loadOrCreateFallbackKey()
+    return { key: loadOrCreateFallbackKey(), source: 'file' }
   }
 }
