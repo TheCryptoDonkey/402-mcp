@@ -188,6 +188,17 @@ if (config.transport === 'http') {
     next()
   })
 
+  // Evict stale rate-limit buckets every 60s to prevent memory leak
+  const rateBucketCleanup = setInterval(() => {
+    const cutoff = Date.now() - RATE_WINDOW_MS
+    for (const [ip, timestamps] of rateBuckets) {
+      if (timestamps.every(t => t <= cutoff)) {
+        rateBuckets.delete(ip)
+      }
+    }
+  }, RATE_WINDOW_MS)
+  rateBucketCleanup.unref()
+
   app.get('/health', (_req, res) => {
     res.json({
       status: 'ok',
@@ -210,6 +221,7 @@ if (config.transport === 'http') {
   })
 
   const shutdown = async () => {
+    clearInterval(rateBucketCleanup)
     console.error('Shutting down gracefully…')
     await server.close()
     httpServer.close(() => process.exit(0))
