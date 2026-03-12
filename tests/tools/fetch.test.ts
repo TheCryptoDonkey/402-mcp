@@ -97,7 +97,7 @@ describe('handleFetch', () => {
       maxAutoPaySats: 100,
     })
 
-    const result = await handleFetch({ url: 'https://api.example.com/data' }, deps)
+    const result = await handleFetch({ url: 'https://api.example.com/data', autoPay: true }, deps)
     const parsed = JSON.parse(result.content[0].text)
 
     expect(parsed.status).toBe(200)
@@ -121,7 +121,7 @@ describe('handleFetch', () => {
       maxAutoPaySats: 100,
     })
 
-    const result = await handleFetch({ url: 'https://api.example.com/data' }, deps)
+    const result = await handleFetch({ url: 'https://api.example.com/data', autoPay: true }, deps)
     const parsed = JSON.parse(result.content[0].text)
 
     expect(parsed.status).toBe(402)
@@ -176,6 +176,25 @@ describe('handleFetch', () => {
     expect(parsed.costSats).toBe(10)
     expect(parsed.message).toContain('autoPay disabled')
     expect(deps.payInvoice).not.toHaveBeenCalled()
+  })
+
+  it('defaults autoPay to false and returns 402 without paying', async () => {
+    const deps = makeDeps({
+      fetchFn: vi.fn().mockResolvedValue(mockResponse(402, {
+        'www-authenticate': 'L402 macaroon="mac1", invoice="lnbc10n1test"',
+      }, '{}')) as unknown as typeof fetch,
+      parseL402: vi.fn().mockReturnValue({ macaroon: 'mac1', invoice: 'lnbc10n1test' }),
+      decodeBolt11: vi.fn().mockReturnValue({ costSats: 10, paymentHash: 'hash1', expiry: 3600 }),
+      maxAutoPaySats: 100,
+    })
+
+    // No autoPay argument — should default to false
+    const result = await handleFetch({ url: 'https://api.example.com/data' }, deps)
+    const parsed = JSON.parse(result.content[0].text)
+
+    expect(parsed.status).toBe(402)
+    expect(deps.payInvoice).not.toHaveBeenCalled()
+    expect(parsed.message).toContain('autoPay disabled')
   })
 
   it('ignores non-numeric x-credit-balance header', async () => {
