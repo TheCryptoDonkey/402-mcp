@@ -1,5 +1,5 @@
 import { validateUrl } from './ssrf-guard.js'
-import { SsrfError, TimeoutError, RetryExhaustedError, DowngradeError } from './errors.js'
+import { SsrfError, TimeoutError, RetryExhaustedError, DowngradeError, ResponseTooLargeError } from './errors.js'
 
 export interface ResilientFetchOptions {
   timeoutMs?: number
@@ -13,6 +13,7 @@ export interface ResilientFetchConfig {
   retries?: number
   retryOn?: (status: number) => boolean
   backoffMs?: number
+  maxResponseBytes?: number
   ssrfAllowPrivate?: boolean
 }
 
@@ -53,6 +54,7 @@ export function createResilientFetch(
   const globalRetries = config.retries ?? DEFAULT_RETRIES
   const globalRetryOn = config.retryOn ?? defaultRetryOn
   const globalBackoff = config.backoffMs ?? DEFAULT_BACKOFF_MS
+  const globalMaxResponseBytes = config.maxResponseBytes ?? 0
   const allowPrivate = config.ssrfAllowPrivate ?? false
 
   return async function resilientFetch(
@@ -79,7 +81,7 @@ export function createResilientFetch(
       }
 
       try {
-        const response = await fetchWithTimeoutAndRedirects(
+        let response = await fetchWithTimeoutAndRedirects(
           fetchFn, urlStr, init, timeoutMs, allowPrivate, urlStr,
         )
 
@@ -87,6 +89,30 @@ export function createResilientFetch(
         if (retryOn(response.status) && attempt < totalAttempts - 1) {
           lastError = new Error(`HTTP ${response.status}`)
           continue
+        }
+
+        if (globalMaxResponseBytes > 0) {
+          const reader = response.body?.getReader()
+          if (reader) {
+            const chunks: Uint8Array[] = []
+            let totalBytes = 0
+            while (true) {
+              const { done, value } = await reader.read()
+              if (done) break
+              totalBytes += value.byteLength
+              if (totalBytes > globalMaxResponseBytes) {
+                reader.cancel()
+                throw new ResponseTooLargeError(globalMaxResponseBytes)
+              }
+              chunks.push(value)
+            }
+            const buffered = new Blob(chunks)
+            response = new Response(buffered, {
+              status: response.status,
+              statusText: response.statusText,
+              headers: response.headers,
+            })
+          }
         }
 
         return response

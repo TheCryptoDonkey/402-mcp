@@ -32,6 +32,7 @@ const config = loadConfig()
 const resilientFetch = createResilientFetch(fetch, {
   timeoutMs: config.fetchTimeoutMs,
   retries: config.fetchMaxRetries,
+  maxResponseBytes: config.fetchMaxResponseBytes,
   ssrfAllowPrivate: config.ssrfAllowPrivate,
 })
 

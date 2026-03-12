@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { SsrfError, TimeoutError, RetryExhaustedError, DowngradeError } from '../../src/fetch/errors.js'
+import { SsrfError, TimeoutError, RetryExhaustedError, DowngradeError, ResponseTooLargeError } from '../../src/fetch/errors.js'
 
 // Mock the SSRF guard
 const mockValidateUrl = vi.fn()
@@ -307,6 +307,35 @@ describe('createResilientFetch', () => {
       const resilientFetch = createResilientFetch(mockFetch, { retries: 2, backoffMs: 1 })
       await expect(resilientFetch('http://10.0.0.1')).rejects.toThrow(SsrfError)
       expect(mockFetch).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('response body size limit', () => {
+    it('returns response when body is under limit', async () => {
+      const body = 'a'.repeat(100)
+      mockFetch.mockResolvedValueOnce(new Response(body, { status: 200 }))
+      const resilientFetch = createResilientFetch(mockFetch, { retries: 0, maxResponseBytes: 1000 })
+
+      const res = await resilientFetch('https://api.example.com')
+      expect(await res.text()).toBe(body)
+    })
+
+    it('throws ResponseTooLargeError when body exceeds limit', async () => {
+      const body = 'a'.repeat(1000)
+      mockFetch.mockResolvedValueOnce(new Response(body, { status: 200 }))
+      const resilientFetch = createResilientFetch(mockFetch, { retries: 0, maxResponseBytes: 100 })
+
+      await expect(resilientFetch('https://api.example.com'))
+        .rejects.toThrow(ResponseTooLargeError)
+    })
+
+    it('does not enforce limit when maxResponseBytes is 0', async () => {
+      const body = 'a'.repeat(10000)
+      mockFetch.mockResolvedValueOnce(new Response(body, { status: 200 }))
+      const resilientFetch = createResilientFetch(mockFetch, { retries: 0, maxResponseBytes: 0 })
+
+      const res = await resilientFetch('https://api.example.com')
+      expect(await res.text()).toBe(body)
     })
   })
 })
