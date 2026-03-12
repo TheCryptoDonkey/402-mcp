@@ -8,11 +8,15 @@ export interface CachedChallenge {
 }
 
 const MAX_CACHE_SIZE = 1000
+const PAYMENT_HASH_RE = /^[0-9a-f]{64}$/
 
 export class ChallengeCache {
   private cache = new Map<string, CachedChallenge>()
 
   set(challenge: CachedChallenge): void {
+    // Reject invalid payment hashes to prevent collisions or abuse
+    if (!PAYMENT_HASH_RE.test(challenge.paymentHash)) return
+
     if (this.cache.size >= MAX_CACHE_SIZE) {
       this.evictExpired()
     }

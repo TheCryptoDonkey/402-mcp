@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { ChallengeCache, type CachedChallenge } from '../../src/l402/challenge-cache.js'
 
+/** Generate a valid 64-char hex payment hash from an index. */
+function hexHash(n: number): string {
+  return n.toString(16).padStart(64, '0')
+}
+
 describe('ChallengeCache', () => {
   let cache: ChallengeCache
 
@@ -8,17 +13,19 @@ describe('ChallengeCache', () => {
     cache = new ChallengeCache()
   })
 
+  const HASH = hexHash(123)
+
   const challenge: CachedChallenge = {
     invoice: 'lnbc100n1...',
     macaroon: 'mac123',
-    paymentHash: 'hash123',
+    paymentHash: HASH,
     costSats: 10,
     expiresAt: Date.now() + 3600_000,
   }
 
   it('stores and retrieves a challenge by paymentHash', () => {
     cache.set(challenge)
-    expect(cache.get('hash123')).toEqual(challenge)
+    expect(cache.get(HASH)).toEqual(challenge)
   })
 
   it('returns undefined for unknown paymentHash', () => {
@@ -27,13 +34,13 @@ describe('ChallengeCache', () => {
 
   it('returns undefined for expired challenge', () => {
     cache.set({ ...challenge, expiresAt: Date.now() - 1000 })
-    expect(cache.get('hash123')).toBeUndefined()
+    expect(cache.get(HASH)).toBeUndefined()
   })
 
   it('removes a challenge', () => {
     cache.set(challenge)
-    cache.delete('hash123')
-    expect(cache.get('hash123')).toBeUndefined()
+    cache.delete(HASH)
+    expect(cache.get(HASH)).toBeUndefined()
   })
 
   it('evicts oldest entries when cache exceeds max size', () => {
@@ -41,7 +48,7 @@ describe('ChallengeCache', () => {
       cache.set({
         invoice: `lnbc${i}`,
         macaroon: `mac${i}`,
-        paymentHash: `hash${i}`,
+        paymentHash: hexHash(i),
         costSats: 10,
         expiresAt: Date.now() + 3600_000,
       })
@@ -52,12 +59,12 @@ describe('ChallengeCache', () => {
 
     // Oldest entries (0-9) should have been evicted
     for (let i = 0; i < 10; i++) {
-      expect(cache.get(`hash${i}`)).toBeUndefined()
+      expect(cache.get(hexHash(i))).toBeUndefined()
     }
 
     // Newest entries should still exist
     for (let i = 1005; i < 1010; i++) {
-      expect(cache.get(`hash${i}`)).toBeDefined()
+      expect(cache.get(hexHash(i))).toBeDefined()
     }
   })
 
@@ -67,30 +74,43 @@ describe('ChallengeCache', () => {
       cache.set({
         invoice: `lnbc${i}`,
         macaroon: `mac${i}`,
-        paymentHash: `expired${i}`,
+        paymentHash: hexHash(10000 + i),
         costSats: 10,
         expiresAt: Date.now() - 1000,
       })
     }
+    const validHash = hexHash(99999)
     cache.set({
       invoice: 'lnbc-valid',
       macaroon: 'mac-valid',
-      paymentHash: 'valid-hash',
+      paymentHash: validHash,
       costSats: 10,
       expiresAt: Date.now() + 3600_000,
     })
 
     // Adding one more should trigger expired eviction, not evict the valid entry
+    const newHash = hexHash(88888)
     cache.set({
       invoice: 'lnbc-new',
       macaroon: 'mac-new',
-      paymentHash: 'new-hash',
+      paymentHash: newHash,
       costSats: 10,
       expiresAt: Date.now() + 3600_000,
     })
 
-    expect(cache.get('valid-hash')).toBeDefined()
-    expect(cache.get('new-hash')).toBeDefined()
+    expect(cache.get(validHash)).toBeDefined()
+    expect(cache.get(newHash)).toBeDefined()
     expect(cache.size).toBe(2)
+  })
+
+  it('rejects invalid payment hashes', () => {
+    cache.set({ ...challenge, paymentHash: 'not-hex' })
+    expect(cache.size).toBe(0)
+
+    cache.set({ ...challenge, paymentHash: '' })
+    expect(cache.size).toBe(0)
+
+    cache.set({ ...challenge, paymentHash: 'ab'.repeat(16) }) // 32 chars, too short
+    expect(cache.size).toBe(0)
   })
 })
