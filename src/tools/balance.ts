@@ -39,7 +39,7 @@ export function registerBalanceTool(server: McpServer, store: CredentialStore): 
     {
       description: 'Check cached credit balance for a server. Returns the last known balance from the credential store without making a network request. The "stale" flag is true if the balance was last updated more than 5 minutes ago.',
       inputSchema: {
-        origin: z.string().url().describe('The server origin (e.g. https://api.example.com)'),
+        origin: z.url().describe('The server origin (e.g. https://api.example.com)'),
       },
     },
     async (args) => handleBalance(args, store),

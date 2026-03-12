@@ -106,7 +106,7 @@ export function registerDiscoverTool(
     {
       description: 'Probe an endpoint to discover its L402 pricing without committing to payment. Returns the cost in sats, available payment methods, and credit tiers (if toll-booth server). The challenge is cached so a subsequent l402_pay can reuse it.',
       inputSchema: {
-        url: z.string().url().describe('The URL to probe for L402 pricing'),
+        url: z.url().describe('The URL to probe for L402 pricing'),
         method: z.string().optional().default('GET').describe('HTTP method to use'),
       },
     },

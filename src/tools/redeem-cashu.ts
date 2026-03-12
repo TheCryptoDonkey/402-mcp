@@ -97,7 +97,7 @@ export function registerRedeemCashuTool(server: McpServer, deps: RedeemCashuDeps
     {
       description: 'Redeem Cashu ecash tokens directly on a toll-booth server, avoiding the Lightning round-trip. Handles the two-step flow automatically (create invoice then redeem token). Only works with toll-booth servers.',
       inputSchema: {
-        url: z.string().url().describe('The toll-booth server URL'),
+        url: z.url().describe('The toll-booth server URL'),
         token: z.string().describe('Cashu token string to redeem (e.g. cashuAey...)'),
       },
     },

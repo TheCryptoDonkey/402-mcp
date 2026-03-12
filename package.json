@@ -20,24 +20,32 @@
     "prepublishOnly": "npm run build && npm test"
   },
   "dependencies": {
-    "@cashu/cashu-ts": "^2.5.0",
+    "@cashu/cashu-ts": "^3.5.0",
     "@modelcontextprotocol/sdk": "^1.26.0",
     "bolt11": "^1.4.1",
     "cors": "^2.8.5",
-    "express": "^4.21.0",
+    "express": "^5.2.1",
     "nostr-tools": "^2.12.0",
     "qrcode": "^1.5.4",
-    "zod": "^3.24.0"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
-    "@types/node": "^22.0.0",
+    "@types/node": "^25.4.0",
     "@types/qrcode": "^1.5.5",
     "typescript": "^5.7.0",
     "vitest": "^4.0.18"
   },
-  "keywords": ["mcp", "l402", "lightning", "cashu", "nwc", "micropayments", "ai-agent"],
+  "keywords": [
+    "mcp",
+    "l402",
+    "lightning",
+    "cashu",
+    "nwc",
+    "micropayments",
+    "ai-agent"
+  ],
   "author": "TheCryptoDonkey",
   "repository": {
     "type": "git",
@@ -46,6 +54,9 @@
   "engines": {
     "node": ">=18"
   },
-  "files": ["build", "LICENSE"],
+  "files": [
+    "build",
+    "LICENSE"
+  ],
   "license": "MIT"
 }

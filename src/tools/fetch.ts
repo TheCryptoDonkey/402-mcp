@@ -152,9 +152,9 @@ export function registerFetchTool(server: McpServer, deps: FetchDeps): void {
     {
       description: 'Make an HTTP request with L402 payment support. Uses stored credentials if available. If a 402 challenge is received and autoPay is true and cost is within MAX_AUTO_PAY_SATS, pays automatically and retries. Returns creditsExhausted: true if existing credentials ran out.',
       inputSchema: {
-        url: z.string().url().describe('The URL to request'),
+        url: z.url().describe('The URL to request'),
         method: z.string().optional().default('GET').describe('HTTP method'),
-        headers: z.record(z.string()).optional().describe('Additional request headers'),
+        headers: z.record(z.string(), z.string()).optional().describe('Additional request headers'),
         body: z.string().optional().describe('Request body (for POST/PUT)'),
         autoPay: z.boolean().optional().default(true).describe('Automatically pay if within MAX_AUTO_PAY_SATS budget'),
       },

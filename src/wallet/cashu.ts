@@ -15,12 +15,11 @@ export function createCashuWallet(tokenStore: CashuTokenStore): WalletProvider {
       }
 
       try {
-        const { CashuMint, CashuWallet, getDecodedToken } = await import('@cashu/cashu-ts')
-        const mint = new CashuMint(token.mint)
-        const wallet = new CashuWallet(mint)
+        const { Wallet, getDecodedToken } = await import('@cashu/cashu-ts')
 
-        // Decode the token to get proofs (v2 format: { mint, proofs, unit })
+        // Decode the token to get proofs ({ mint, proofs, unit })
         const decoded = getDecodedToken(token.token)
+        const wallet = new Wallet(token.mint, { unit: decoded.unit ?? 'sat' })
         const proofs = decoded.proofs ?? []
 
         // Create melt quote to determine required amount including fee reserve
