@@ -166,6 +166,37 @@ describe('createCashuWallet', () => {
     warnSpy.mockRestore()
   })
 
+  it('serialises concurrent payment attempts', async () => {
+    const store = mockTokenStore([
+      { token: 'cashuA1', mint: 'https://mint.example.com', amountSats: 500, addedAt: new Date().toISOString() },
+      { token: 'cashuA2', mint: 'https://mint.example.com', amountSats: 500, addedAt: new Date().toISOString() },
+    ])
+
+    mockWalletInstance.createMeltQuote.mockResolvedValue({ amount: 100, fee_reserve: 10 })
+    mockWalletInstance.send.mockResolvedValue({
+      send: [{ amount: 128, id: 'abc', secret: 's2', C: 'c2' }],
+      keep: [],
+    })
+    mockWalletInstance.meltProofs.mockResolvedValue({
+      quote: { state: 'PAID', payment_preimage: 'deadbeef' },
+      change: [],
+    })
+
+    const wallet = createCashuWallet(store)
+
+    // Fire two payments concurrently — they should serialise, not race
+    const [r1, r2] = await Promise.all([
+      wallet.payInvoice('lnbc100n1first'),
+      wallet.payInvoice('lnbc100n1second'),
+    ])
+
+    expect(r1.paid).toBe(true)
+    expect(r2.paid).toBe(true)
+
+    // consumeFirst should have been called twice (one per payment, serialised)
+    expect(store.consumeFirst).toHaveBeenCalledTimes(2)
+  })
+
   it('re-adds token to store when melt fails', async () => {
     const store = mockTokenStore([
       { token: 'cashuAfail', mint: 'https://mint.example.com', amountSats: 500, addedAt: new Date().toISOString() },
