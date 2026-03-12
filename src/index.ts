@@ -169,21 +169,34 @@ if (config.transport === 'http') {
   app.use(cors({ origin: config.corsOrigin }))
   app.use(express.json({ limit: '100kb' }))
 
+  // Simple sliding-window rate limiter (100 requests per 60s per IP)
+  const RATE_WINDOW_MS = 60_000
+  const RATE_MAX = 100
+  const rateBuckets = new Map<string, number[]>()
+
+  app.use((req, res, next) => {
+    const ip = req.ip ?? 'unknown'
+    const now = Date.now()
+    const cutoff = now - RATE_WINDOW_MS
+    const timestamps = (rateBuckets.get(ip) ?? []).filter(t => t > cutoff)
+    if (timestamps.length >= RATE_MAX) {
+      res.status(429).json({ error: 'Too many requests' })
+      return
+    }
+    timestamps.push(now)
+    rateBuckets.set(ip, timestamps)
+    next()
+  })
+
   app.get('/health', (_req, res) => {
     res.json({
       status: 'ok',
       server: 'l402-mcp',
       version,
-      credentialCount: credentialStore.count(),
-      cashuBalanceSats: cashuTokenStore?.totalBalance() ?? 0,
-      nwcConfigured: !!config.nwcUri,
-      uptime: process.uptime(),
     })
   })
 
-  const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: undefined,
-  })
+  const transport = new StreamableHTTPServerTransport({})
 
   await server.connect(transport)
 
