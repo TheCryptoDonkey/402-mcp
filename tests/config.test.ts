@@ -117,6 +117,19 @@ describe('config validation', () => {
     expect(() => loadConfig()).toThrow('FETCH_MAX_RESPONSE_BYTES')
   })
 
+  it('throws when CREDENTIAL_STORE escapes home directory', async () => {
+    vi.stubEnv('CREDENTIAL_STORE', '/tmp/evil/credentials.json')
+    const { loadConfig } = await import('../src/config.js')
+    expect(() => loadConfig()).toThrow('CREDENTIAL_STORE must be within the home directory')
+  })
+
+  it('accepts CREDENTIAL_STORE within home directory', async () => {
+    const { homedir } = await import('node:os')
+    vi.stubEnv('CREDENTIAL_STORE', `${homedir()}/.l402-mcp/test-creds.json`)
+    const { loadConfig } = await import('../src/config.js')
+    expect(() => loadConfig()).not.toThrow()
+  })
+
   it('accepts MAX_AUTO_PAY_SATS = 0 (disables auto-pay)', async () => {
     vi.stubEnv('MAX_AUTO_PAY_SATS', '0')
     const { loadConfig } = await import('../src/config.js')

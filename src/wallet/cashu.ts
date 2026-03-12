@@ -61,7 +61,7 @@ async function doPayInvoice(invoice: string, tokenStore: CashuTokenStore): Promi
   } catch (err) {
     // On error, re-add the token (it may not have been spent)
     tokenStore.add(token)
-    return { paid: false, method: 'cashu', reason: String(err) }
+    return { paid: false, method: 'cashu', reason: 'Cashu payment failed' }
   }
 }
 

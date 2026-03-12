@@ -9,6 +9,8 @@ export interface CachedChallenge {
 
 const MAX_CACHE_SIZE = 1000
 const PAYMENT_HASH_RE = /^[0-9a-f]{64}$/
+/** Maximum length for cached string fields to prevent memory exhaustion. */
+const MAX_STRING_LEN = 10_000
 
 export class ChallengeCache {
   private cache = new Map<string, CachedChallenge>()
@@ -16,6 +18,9 @@ export class ChallengeCache {
   set(challenge: CachedChallenge): void {
     // Reject invalid payment hashes to prevent collisions or abuse
     if (!PAYMENT_HASH_RE.test(challenge.paymentHash)) return
+
+    // Reject oversized strings to prevent memory exhaustion
+    if (challenge.invoice.length > MAX_STRING_LEN || challenge.macaroon.length > MAX_STRING_LEN) return
 
     if (this.cache.size >= MAX_CACHE_SIZE) {
       this.evictExpired()

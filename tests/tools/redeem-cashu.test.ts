@@ -70,6 +70,7 @@ describe('handleRedeemCashu', () => {
   it('returns error when create-invoice fails', async () => {
     const mockFetch = vi.fn().mockResolvedValueOnce({
       ok: false,
+      status: 429,
       json: async () => ({ error: 'Rate limited' }),
     })
 
@@ -84,7 +85,9 @@ describe('handleRedeemCashu', () => {
 
     const parsed = JSON.parse(result.content[0].text)
     expect(parsed.error).toContain('Failed to create invoice')
-    expect(parsed.error).toContain('Rate limited')
+    expect(parsed.error).toContain('429')
+    // Must NOT leak upstream error body
+    expect(parsed.error).not.toContain('Rate limited')
     expect(result.isError).toBe(true)
   })
 
@@ -102,6 +105,7 @@ describe('handleRedeemCashu', () => {
       // Second call: cashu-redeem fails
       .mockResolvedValueOnce({
         ok: false,
+        status: 400,
         json: async () => ({ error: 'Token already spent' }),
       })
 
@@ -119,7 +123,9 @@ describe('handleRedeemCashu', () => {
 
     const parsed = JSON.parse(result.content[0].text)
     expect(parsed.error).toContain('Cashu redemption failed')
-    expect(parsed.error).toContain('Token already spent')
+    expect(parsed.error).toContain('400')
+    // Must NOT leak upstream error body
+    expect(parsed.error).not.toContain('Token already spent')
     expect(result.isError).toBe(true)
     expect(storeCredential).not.toHaveBeenCalled()
     expect(removeToken).not.toHaveBeenCalled()

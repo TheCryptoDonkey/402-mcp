@@ -103,6 +103,19 @@ describe('ChallengeCache', () => {
     expect(cache.size).toBe(2)
   })
 
+  it('rejects oversized invoice or macaroon strings', () => {
+    const longString = 'x'.repeat(10_001)
+    cache.set({ ...challenge, invoice: longString })
+    expect(cache.size).toBe(0)
+
+    cache.set({ ...challenge, macaroon: longString })
+    expect(cache.size).toBe(0)
+
+    // Just under the limit should be accepted
+    cache.set({ ...challenge, invoice: 'x'.repeat(10_000) })
+    expect(cache.size).toBe(1)
+  })
+
   it('rejects invalid payment hashes', () => {
     cache.set({ ...challenge, paymentHash: 'not-hex' })
     expect(cache.size).toBe(0)

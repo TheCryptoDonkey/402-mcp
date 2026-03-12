@@ -5,8 +5,15 @@
 export class SpendTracker {
   private entries: Array<{ sats: number; at: number }> = []
   private windowMs = 60_000
+  /** Hard cap on entries to prevent unbounded memory growth. */
+  private static readonly MAX_ENTRIES = 10_000
 
   record(sats: number): void {
+    // Evict stale entries before adding to prevent unbounded growth
+    if (this.entries.length >= SpendTracker.MAX_ENTRIES) {
+      const cutoff = Date.now() - this.windowMs
+      this.entries = this.entries.filter(e => e.at >= cutoff)
+    }
     this.entries.push({ sats, at: Date.now() })
   }
 

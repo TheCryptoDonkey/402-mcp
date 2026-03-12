@@ -60,6 +60,16 @@ export async function handleBuyCredits(
       body: JSON.stringify({ amountSats: args.amountSats }),
     }, { retries: 0 })
 
+    if (!response.ok) {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({ error: `Failed to create invoice (HTTP ${response.status})` }),
+        }],
+        isError: true as const,
+      }
+    }
+
     const raw = await response.json()
     const validated = CreateInvoiceResponse.safeParse(raw)
     if (!validated.success) {

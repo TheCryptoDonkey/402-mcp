@@ -35,11 +35,10 @@ export async function handleRedeemCashu(
     }, { retries: 0 })
 
     if (!invoiceResponse.ok) {
-      const err = await invoiceResponse.json() as Record<string, unknown>
       return {
         content: [{
           type: 'text' as const,
-          text: JSON.stringify({ error: `Failed to create invoice: ${err.error ?? 'Unknown error'}` }),
+          text: JSON.stringify({ error: `Failed to create invoice (HTTP ${invoiceResponse.status})` }),
         }],
         isError: true as const,
       }
@@ -73,11 +72,10 @@ export async function handleRedeemCashu(
     }, { retries: 0 })
 
     if (!redeemResponse.ok) {
-      const err = await redeemResponse.json() as Record<string, unknown>
       return {
         content: [{
           type: 'text' as const,
-          text: JSON.stringify({ error: `Cashu redemption failed: ${err.error ?? 'Unknown error'}` }),
+          text: JSON.stringify({ error: `Cashu redemption failed (HTTP ${redeemResponse.status})` }),
         }],
         isError: true as const,
       }

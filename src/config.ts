@@ -77,5 +77,12 @@ export function loadConfig(): L402Config {
   assertPositiveInt('HUMAN_PAY_TIMEOUT_S', config.humanPayTimeoutS)
   assertPositiveInt('HUMAN_PAY_POLL_S', config.humanPayPollS)
 
+  // Validate credential store path stays within home directory
+  const resolvedStorePath = resolve(config.credentialStorePath)
+  const home = homedir()
+  if (!resolvedStorePath.startsWith(home)) {
+    throw new Error(`CREDENTIAL_STORE must be within the home directory (got: ${config.credentialStorePath})`)
+  }
+
   return config
 }

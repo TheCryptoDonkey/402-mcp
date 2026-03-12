@@ -197,6 +197,27 @@ describe('createCashuWallet', () => {
     expect(store.consumeFirst).toHaveBeenCalledTimes(2)
   })
 
+  it('does not leak error details on exception', async () => {
+    const store = mockTokenStore([
+      { token: 'cashuAerr', mint: 'https://mint.example.com', amountSats: 500, addedAt: new Date().toISOString() },
+    ])
+
+    mockWalletInstance.createMeltQuote.mockRejectedValue(new Error('Connection to internal-mint.local:3338 refused'))
+
+    const wallet = createCashuWallet(store)
+    const result = await wallet.payInvoice('lnbc100n1test')
+
+    expect(result.paid).toBe(false)
+    // Error message should be generic, not leak internal details
+    expect(result.reason).toBe('Cashu payment failed')
+    expect(result.reason).not.toContain('internal-mint')
+    expect(result.reason).not.toContain('3338')
+    // Token should be re-added since it may not have been spent
+    expect(store.add).toHaveBeenCalledWith(
+      expect.objectContaining({ token: 'cashuAerr' }),
+    )
+  })
+
   it('re-adds token to store when melt fails', async () => {
     const store = mockTokenStore([
       { token: 'cashuAfail', mint: 'https://mint.example.com', amountSats: 500, addedAt: new Date().toISOString() },

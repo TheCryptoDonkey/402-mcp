@@ -61,6 +61,7 @@ describe('handleBuyCredits', () => {
 
   it('purchases credits and stores credential', async () => {
     const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
       status: 200,
       json: async () => ({
         bolt11: 'lnbc5000n1test',
@@ -94,8 +95,34 @@ describe('handleBuyCredits', () => {
     expect(payInvoice).toHaveBeenCalledWith('lnbc5000n1test', undefined)
   })
 
+  it('returns error when create-invoice returns non-ok status', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({ error: 'internal secret details' }),
+    })
+
+    const result = await handleBuyCredits(
+      { url: 'https://api.example.com/data', amountSats: 5000 },
+      {
+        fetchFn: mockFetch as unknown as typeof fetch,
+        payInvoice: vi.fn(),
+        storeCredential: vi.fn(),
+        decodeBolt11: vi.fn(),
+        maxSpendPerMinuteSats: 10000,
+        spendTracker: new SpendTracker(),
+      },
+    )
+
+    const parsed = JSON.parse(result.content[0].text)
+    expect(parsed.error).toContain('500')
+    expect(parsed.error).not.toContain('internal secret details')
+    expect(result.isError).toBe(true)
+  })
+
   it('returns error when server response JSON is an array', async () => {
     const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
       status: 200,
       json: async () => ['not', 'an', 'object'],
     })
@@ -119,6 +146,7 @@ describe('handleBuyCredits', () => {
 
   it('returns error when payment fails', async () => {
     const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
       status: 200,
       json: async () => ({
         bolt11: 'lnbc5000n1test',

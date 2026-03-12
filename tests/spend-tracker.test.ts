@@ -78,6 +78,25 @@ describe('SpendTracker', () => {
     expect(tracker.wouldExceed(5000, 10000)).toBe(false)
   })
 
+  it('evicts stale entries when approaching MAX_ENTRIES cap', () => {
+    const tracker = new SpendTracker()
+
+    // Add entries at time 0
+    for (let i = 0; i < 100; i++) {
+      tracker.record(1)
+    }
+    expect(tracker.recentSpend()).toBe(100)
+
+    // Advance past the 60s window
+    vi.advanceTimersByTime(61_000)
+
+    // These should be fresh entries; stale ones get cleaned on record()
+    for (let i = 0; i < 50; i++) {
+      tracker.record(1)
+    }
+    expect(tracker.recentSpend()).toBe(50)
+  })
+
   it('wouldExceed returns true at exactly the limit boundary', () => {
     const tracker = new SpendTracker()
     tracker.record(5000)
