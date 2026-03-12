@@ -10,6 +10,9 @@ export interface L402Config {
   port: number
   humanPayTimeoutS: number
   humanPayPollS: number
+  fetchTimeoutMs: number
+  fetchMaxRetries: number
+  ssrfAllowPrivate: boolean
 }
 
 export function loadConfig(): L402Config {
@@ -24,5 +27,8 @@ export function loadConfig(): L402Config {
     port: parseInt(process.env.PORT ?? '3402', 10),
     humanPayTimeoutS: parseInt(process.env.HUMAN_PAY_TIMEOUT_S ?? '600', 10),
     humanPayPollS: parseInt(process.env.HUMAN_PAY_POLL_S ?? '3', 10),
+    fetchTimeoutMs: parseInt(process.env.FETCH_TIMEOUT_MS ?? '30000', 10),
+    fetchMaxRetries: parseInt(process.env.FETCH_MAX_RETRIES ?? '2', 10),
+    ssrfAllowPrivate: process.env.SSRF_ALLOW_PRIVATE === 'true',
   }
 }
