@@ -48,7 +48,7 @@ export async function handleBuyCredits(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ amountSats: args.amountSats }),
-    })
+    }, { retries: 0 })
 
     const data = await response.json() as Record<string, unknown>
     const invoice = data.bolt11 as string

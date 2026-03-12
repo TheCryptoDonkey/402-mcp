@@ -20,7 +20,7 @@ export async function handleRedeemCashu(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
-    })
+    }, { retries: 0 })
 
     if (!invoiceResponse.ok) {
       const err = await invoiceResponse.json() as Record<string, unknown>
@@ -50,7 +50,7 @@ export async function handleRedeemCashu(
         paymentHash,
         statusToken,
       }),
-    })
+    }, { retries: 0 })
 
     if (!redeemResponse.ok) {
       const err = await redeemResponse.json() as Record<string, unknown>

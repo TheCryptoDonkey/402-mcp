@@ -83,7 +83,7 @@ export async function handlePay(
           timeoutS: deps.humanPayTimeoutS,
           checkSettlement: async (hash: string) => {
             try {
-              const res = await deps.fetchFn(`${origin}/invoice-status/${hash}`)
+              const res = await deps.fetchFn(`${origin}/invoice-status/${hash}`, undefined, { retries: 0 })
               if (!res.ok) return { paid: false }
               const data = await res.json() as Record<string, unknown>
               return {
