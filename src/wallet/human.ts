@@ -3,7 +3,6 @@ import type { WalletProvider, PaymentResult } from './types.js'
 export interface HumanWalletOptions {
   pollIntervalS: number
   timeoutS: number
-  checkSettlement: (paymentHash: string) => Promise<{ paid: boolean; preimage?: string }>
   generateQr: (invoice: string) => Promise<string>
 }
 
@@ -15,8 +14,6 @@ export function createHumanWallet(options: HumanWalletOptions): WalletProvider {
     async payInvoice(invoice: string): Promise<PaymentResult> {
       const qrDataUri = await options.generateQr(invoice)
 
-      // Return immediately with the invoice for the human.
-      // The reason field carries the structured data for the caller.
       return {
         paid: false,
         method: 'human',
@@ -32,9 +29,15 @@ export function createHumanWallet(options: HumanWalletOptions): WalletProvider {
   }
 }
 
+export interface PollOptions {
+  pollIntervalS: number
+  timeoutS: number
+  checkSettlement: (paymentHash: string) => Promise<{ paid: boolean; preimage?: string }>
+}
+
 export async function pollForSettlement(
   paymentHash: string,
-  options: Pick<HumanWalletOptions, 'pollIntervalS' | 'timeoutS' | 'checkSettlement'>,
+  options: PollOptions,
 ): Promise<PaymentResult> {
   const deadline = Date.now() + options.timeoutS * 1000
 

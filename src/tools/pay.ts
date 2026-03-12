@@ -2,12 +2,16 @@ import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { ChallengeCache } from '../l402/challenge-cache.js'
 import type { WalletMethod, WalletProvider } from '../wallet/types.js'
+import { pollForSettlement } from '../wallet/human.js'
 
 export interface PayDeps {
   cache: ChallengeCache
   resolveWallet: (method?: WalletMethod) => WalletProvider | undefined
   storeCredential: (origin: string, macaroon: string, preimage: string, paymentHash: string, server: 'toll-booth' | null) => void
   maxAutoPaySats: number
+  fetchFn: typeof fetch
+  humanPayPollS: number
+  humanPayTimeoutS: number
 }
 
 export async function handlePay(
@@ -65,7 +69,53 @@ export async function handlePay(
     }
   }
 
-  const result = await wallet.payInvoice(invoice)
+  let result = await wallet.payInvoice(invoice)
+
+  // If human wallet returned awaitingHuman, poll for settlement
+  if (!result.paid && result.method === 'human' && result.reason) {
+    try {
+      const humanData = JSON.parse(result.reason)
+      if (humanData.awaitingHuman && paymentHash && cachedUrl) {
+        const origin = new URL(cachedUrl).origin
+        const pollResult = await pollForSettlement(paymentHash, {
+          pollIntervalS: deps.humanPayPollS,
+          timeoutS: deps.humanPayTimeoutS,
+          checkSettlement: async (hash: string) => {
+            try {
+              const res = await deps.fetchFn(`${origin}/invoice-status/${hash}`)
+              if (!res.ok) return { paid: false }
+              const data = await res.json() as Record<string, unknown>
+              return {
+                paid: data.settled === true,
+                preimage: data.preimage as string | undefined,
+              }
+            } catch {
+              return { paid: false }
+            }
+          },
+        })
+
+        if (pollResult.paid) {
+          result = pollResult
+        } else {
+          return {
+            content: [{
+              type: 'text' as const,
+              text: JSON.stringify({
+                paid: false,
+                method: 'human',
+                reason: 'Payment not received within timeout',
+                qrDataUri: humanData.qrDataUri,
+                invoice: humanData.invoice,
+              }, null, 2),
+            }],
+          }
+        }
+      }
+    } catch {
+      // reason wasn't JSON; fall through to normal response
+    }
+  }
 
   if (result.paid && result.preimage) {
     const origin = cachedUrl ? new URL(cachedUrl).origin : ''
@@ -99,7 +149,7 @@ export function registerPayTool(server: McpServer, deps: PayDeps): void {
   server.registerTool(
     'l402_pay',
     {
-      description: 'Pay a specific L402 invoice. Use this when you want to reason about costs before paying rather than auto-paying via l402_fetch. Can reuse a cached challenge from l402_discover by passing just the paymentHash. Methods: "nwc" (autonomous Lightning), "cashu" (autonomous ecash), "human" (present QR code).',
+      description: 'Pay a specific L402 invoice. Use this when you want to reason about costs before paying rather than auto-paying via l402_fetch. Can reuse a cached challenge from l402_discover by passing just the paymentHash. Methods: "nwc" (autonomous Lightning), "cashu" (autonomous ecash), "human" (present QR code and poll for settlement).',
       inputSchema: {
         invoice: z.string().optional().describe('BOLT-11 invoice to pay. Optional if paymentHash matches a cached challenge from l402_discover.'),
         macaroon: z.string().optional().describe('Macaroon from the L402 challenge. Optional if paymentHash matches a cached challenge.'),

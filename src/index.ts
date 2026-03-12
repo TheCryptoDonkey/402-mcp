@@ -50,17 +50,9 @@ async function generateQr(invoice: string): Promise<string> {
   return QRCode.toDataURL(invoice.toUpperCase(), { type: 'image/png', margin: 2 })
 }
 
-// Invoice status checking for human-in-the-loop polling
-// This hits the server's invoice-status endpoint (works with toll-booth; other servers may vary)
-async function checkSettlement(_paymentHash: string): Promise<{ paid: boolean; preimage?: string }> {
-  // We don't know the server URL here; this will be wired per-request in the pay tool
-  return { paid: false }
-}
-
 walletProviders.push(createHumanWallet({
   pollIntervalS: config.humanPayPollS,
   timeoutS: config.humanPayTimeoutS,
-  checkSettlement,
   generateQr,
 }))
 
@@ -126,6 +118,9 @@ registerPayTool(server, {
   resolveWallet: getWallet,
   storeCredential,
   maxAutoPaySats: config.maxAutoPaySats,
+  fetchFn: fetch,
+  humanPayPollS: config.humanPayPollS,
+  humanPayTimeoutS: config.humanPayTimeoutS,
 })
 
 registerCredentialsTool(server, credentialStore)
