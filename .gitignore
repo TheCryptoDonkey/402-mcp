@@ -1,2 +1,5 @@
 build/
 node_modules/
+*.tgz
+.l402-mcp/
+*.db

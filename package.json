@@ -16,7 +16,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "start": "node build/index.js",
-    "start:http": "TRANSPORT=http node build/index.js"
+    "start:http": "TRANSPORT=http node build/index.js",
+    "prepublishOnly": "npm run build && npm test"
   },
   "dependencies": {
     "@cashu/cashu-ts": "^2.5.0",
@@ -41,6 +42,9 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/TheCryptoDonkey/l402-mcp.git"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "files": ["build", "LICENSE"],
   "license": "MIT"
