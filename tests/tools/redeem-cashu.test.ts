@@ -47,6 +47,26 @@ describe('handleRedeemCashu', () => {
     expect(mockFetch.mock.calls[1][0]).toBe('https://api.example.com/cashu-redeem')
   })
 
+  it('returns error when create-invoice response JSON is an array', async () => {
+    const mockFetch = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ['not', 'an', 'object'],
+    })
+
+    const result = await handleRedeemCashu(
+      { url: 'https://api.example.com/data', token: 'cashuAeyJ...' },
+      {
+        fetchFn: mockFetch as unknown as typeof fetch,
+        storeCredential: vi.fn(),
+        removeToken: vi.fn(),
+      },
+    )
+
+    const parsed = JSON.parse(result.content[0].text)
+    expect(parsed.error).toBeDefined()
+    expect(result.isError).toBe(true)
+  })
+
   it('returns error when create-invoice fails', async () => {
     const mockFetch = vi.fn().mockResolvedValueOnce({
       ok: false,

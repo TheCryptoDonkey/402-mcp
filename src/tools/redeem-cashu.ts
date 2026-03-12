@@ -3,6 +3,17 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { ResilientFetchOptions } from '../fetch/resilient-fetch.js'
 import { safeErrorMessage } from './safe-error.js'
 
+const InvoiceResponse = z.object({
+  payment_hash: z.string(),
+  macaroon: z.string(),
+  payment_url: z.string(),
+})
+
+const RedeemResponseSchema = z.object({
+  token_suffix: z.string(),
+  credited: z.number().optional(),
+})
+
 export interface RedeemCashuDeps {
   fetchFn: (url: string | URL, init?: RequestInit, options?: ResilientFetchOptions) => Promise<Response>
   storeCredential: (origin: string, macaroon: string, preimage: string, paymentHash: string) => void
@@ -34,12 +45,9 @@ export async function handleRedeemCashu(
       }
     }
 
-    const invoiceData = await invoiceResponse.json() as Record<string, unknown>
-    const paymentHash = invoiceData.payment_hash
-    const macaroon = invoiceData.macaroon
-    const paymentUrl = invoiceData.payment_url
-
-    if (typeof paymentHash !== 'string' || typeof macaroon !== 'string' || typeof paymentUrl !== 'string') {
+    const raw = await invoiceResponse.json()
+    const invoiceValidated = InvoiceResponse.safeParse(raw)
+    if (!invoiceValidated.success) {
       return {
         content: [{
           type: 'text' as const,
@@ -48,6 +56,7 @@ export async function handleRedeemCashu(
         isError: true as const,
       }
     }
+    const { payment_hash: paymentHash, macaroon, payment_url: paymentUrl } = invoiceValidated.data
 
     // Extract statusToken from payment_url query param
     const statusToken = new URL(paymentUrl, origin).searchParams.get('token') ?? ''
@@ -74,11 +83,9 @@ export async function handleRedeemCashu(
       }
     }
 
-    const redeemData = await redeemResponse.json() as Record<string, unknown>
-    const tokenSuffix = redeemData.token_suffix
-    const creditSats = redeemData.credited
-
-    if (typeof tokenSuffix !== 'string') {
+    const redeemRaw = await redeemResponse.json()
+    const redeemValidated = RedeemResponseSchema.safeParse(redeemRaw)
+    if (!redeemValidated.success) {
       return {
         content: [{
           type: 'text' as const,
@@ -87,6 +94,7 @@ export async function handleRedeemCashu(
         isError: true as const,
       }
     }
+    const { token_suffix: tokenSuffix, credited: creditSats } = redeemValidated.data
 
     // Store credential and remove spent token
     deps.storeCredential(origin, macaroon, tokenSuffix, paymentHash)

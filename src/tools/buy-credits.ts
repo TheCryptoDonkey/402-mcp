@@ -6,6 +6,12 @@ import type { ResilientFetchOptions } from '../fetch/resilient-fetch.js'
 import type { SpendTracker } from '../spend-tracker.js'
 import { safeErrorMessage } from './safe-error.js'
 
+const CreateInvoiceResponse = z.object({
+  bolt11: z.string(),
+  macaroon: z.string(),
+  credit_sats: z.number().optional(),
+})
+
 export interface BuyCreditsDeps {
   fetchFn: (url: string | URL, init?: RequestInit, options?: ResilientFetchOptions) => Promise<Response>
   payInvoice: (invoice: string, method?: WalletMethod) => Promise<{ paid: boolean; preimage?: string; method: string }>
@@ -54,20 +60,18 @@ export async function handleBuyCredits(
       body: JSON.stringify({ amountSats: args.amountSats }),
     }, { retries: 0 })
 
-    const data = await response.json() as Record<string, unknown>
-    const invoice = data.bolt11
-    const macaroon = data.macaroon
-    const creditSats = data.credit_sats
-
-    if (typeof invoice !== 'string' || typeof macaroon !== 'string') {
+    const raw = await response.json()
+    const validated = CreateInvoiceResponse.safeParse(raw)
+    if (!validated.success) {
       return {
         content: [{
           type: 'text' as const,
-          text: JSON.stringify({ error: 'Invalid server response: missing bolt11 or macaroon' }),
+          text: JSON.stringify({ error: 'Invalid server response: missing or malformed bolt11/macaroon' }),
         }],
         isError: true as const,
       }
     }
+    const { bolt11: invoice, macaroon, credit_sats: creditSats } = validated.data
 
     // Check per-minute spend limit before paying
     if (deps.spendTracker.wouldExceed(args.amountSats, deps.maxSpendPerMinuteSats)) {

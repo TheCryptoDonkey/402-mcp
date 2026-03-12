@@ -94,6 +94,29 @@ describe('handleBuyCredits', () => {
     expect(payInvoice).toHaveBeenCalledWith('lnbc5000n1test', undefined)
   })
 
+  it('returns error when server response JSON is an array', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      status: 200,
+      json: async () => ['not', 'an', 'object'],
+    })
+
+    const result = await handleBuyCredits(
+      { url: 'https://api.example.com/data', amountSats: 5000 },
+      {
+        fetchFn: mockFetch as unknown as typeof fetch,
+        payInvoice: vi.fn(),
+        storeCredential: vi.fn(),
+        decodeBolt11: vi.fn(),
+        maxSpendPerMinuteSats: 10000,
+        spendTracker: new SpendTracker(),
+      },
+    )
+
+    const parsed = JSON.parse(result.content[0].text)
+    expect(parsed.error).toBeDefined()
+    expect(result.isError).toBe(true)
+  })
+
   it('returns error when payment fails', async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       status: 200,
