@@ -1,16 +1,31 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { mkdtempSync, rmSync } from 'node:fs'
-import { join } from 'node:path'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
+import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
+
+vi.mock('keytar', () => {
+  const store = new Map<string, string>()
+  return {
+    default: {
+      getPassword: vi.fn(async (_s: string, _a: string) => store.get(`${_s}:${_a}`) ?? null),
+      setPassword: vi.fn(async (_s: string, _a: string, p: string) => { store.set(`${_s}:${_a}`, p) }),
+    },
+  }
+})
+
 import { CashuTokenStore, type StoredToken } from '../../src/store/cashu-tokens.js'
+import { isEncrypted } from '../../src/store/encryption.js'
 
 describe('CashuTokenStore', () => {
   let dir: string
+  let filePath: string
   let store: CashuTokenStore
 
-  beforeEach(() => {
+  beforeEach(async () => {
     dir = mkdtempSync(join(tmpdir(), 'l402-cashu-test-'))
-    store = new CashuTokenStore(join(dir, 'tokens.json'))
+    filePath = join(dir, 'tokens.json')
+    store = new CashuTokenStore(filePath)
+    await store.init()
   })
 
   afterEach(() => {
@@ -53,10 +68,18 @@ describe('CashuTokenStore', () => {
     expect(store.consumeFirst()).toBeUndefined()
   })
 
-  it('persists to disk', () => {
+  it('persists tokens in encrypted format', async () => {
     store.add(token)
-    const store2 = new CashuTokenStore(join(dir, 'tokens.json'))
+    const raw = JSON.parse(readFileSync(filePath, 'utf8'))
+    expect(isEncrypted(raw)).toBe(true)
+  })
+
+  it('persists to disk and reloads', async () => {
+    store.add(token)
+    const store2 = new CashuTokenStore(filePath)
+    await store2.init()
     expect(store2.list()).toHaveLength(1)
+    expect(store2.list()[0].token).toBe(token.token)
   })
 
   it('removes a specific token', () => {
@@ -65,5 +88,18 @@ describe('CashuTokenStore', () => {
     store.remove('cashuAey...')
     expect(store.list()).toHaveLength(1)
     expect(store.list()[0].token).toBe('second')
+  })
+
+  it('migrates plaintext tokens on first read', async () => {
+    mkdirSync(dirname(filePath), { recursive: true })
+    writeFileSync(filePath, JSON.stringify({
+      tokens: [{ token: 'cashuOld', mint: 'https://old.mint.com', amountSats: 50, addedAt: '2026-01-01T00:00:00Z' }],
+    }))
+    const migrated = new CashuTokenStore(filePath)
+    await migrated.init()
+    expect(migrated.list()).toHaveLength(1)
+    expect(migrated.list()[0].token).toBe('cashuOld')
+    const raw = JSON.parse(readFileSync(filePath, 'utf8'))
+    expect(isEncrypted(raw)).toBe(true)
   })
 })

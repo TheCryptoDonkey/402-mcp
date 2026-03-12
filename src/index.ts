@@ -39,6 +39,7 @@ const resilientFetch = createResilientFetch(fetch, {
 const credentialStore = new CredentialStore(config.credentialStorePath)
 await credentialStore.init()
 const cashuTokenStore = config.cashuTokensPath ? new CashuTokenStore(config.cashuTokensPath) : undefined
+if (cashuTokenStore) await cashuTokenStore.init()
 const challengeCache = new ChallengeCache()
 
 // Wallet providers (priority order: NWC > Cashu > human)

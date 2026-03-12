@@ -1,5 +1,6 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdirSync, existsSync, chmodSync } from 'node:fs'
 import { dirname } from 'node:path'
+import { getOrCreateKey, encrypt, decrypt, isEncrypted, type EncryptedPayload } from './encryption.js'
 
 export interface StoredToken {
   token: string
@@ -14,8 +15,14 @@ interface TokenStoreData {
 
 export class CashuTokenStore {
   private data: TokenStoreData = { tokens: [] }
+  private key: Buffer | null = null
 
   constructor(private readonly path: string) {
+    // load() is now called from init()
+  }
+
+  async init(): Promise<void> {
+    this.key = await getOrCreateKey()
     this.load()
   }
 
@@ -44,17 +51,21 @@ export class CashuTokenStore {
   }
 
   private load(): void {
+    if (!existsSync(this.path)) return
     try {
-      if (existsSync(this.path)) {
-        const raw = readFileSync(this.path, 'utf-8')
-        this.data = JSON.parse(raw)
-        if (!Array.isArray(this.data.tokens)) {
-          this.data = { tokens: [] }
-        }
+      const raw = JSON.parse(readFileSync(this.path, 'utf-8'))
+      if (isEncrypted(raw)) {
+        const json = decrypt(raw as EncryptedPayload, this.key!)
+        const parsed = JSON.parse(json) as TokenStoreData
+        this.data = Array.isArray(parsed.tokens) ? parsed : { tokens: [] }
+      } else if (Array.isArray(raw.tokens)) {
+        // Legacy plaintext; migrate
+        this.data = raw as TokenStoreData
+        this.save() // Re-save as encrypted
+      } else {
+        this.data = { tokens: [] }
       }
-    } catch {
-      this.data = { tokens: [] }
-    }
+    } catch { this.data = { tokens: [] } }
   }
 
   private save(): void {
@@ -62,6 +73,13 @@ export class CashuTokenStore {
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true })
     }
-    writeFileSync(this.path, JSON.stringify(this.data, null, 2))
+    const json = JSON.stringify(this.data, null, 2)
+    if (this.key) {
+      const payload = encrypt(json, this.key)
+      writeFileSync(this.path, JSON.stringify(payload, null, 2))
+    } else {
+      writeFileSync(this.path, json)
+    }
+    try { chmodSync(this.path, 0o600) } catch { /* Windows */ }
   }
 }
