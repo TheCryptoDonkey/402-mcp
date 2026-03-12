@@ -239,6 +239,20 @@ describe('handleFetch', () => {
     expect(deps.credentialStore.updateBalance).not.toHaveBeenCalled()
   })
 
+  it('rejects negative x-credit-balance header', async () => {
+    const deps = makeDeps({
+      fetchFn: vi.fn().mockResolvedValue(
+        mockResponse(200, { 'x-credit-balance': '-999' }, 'OK'),
+      ) as unknown as typeof fetch,
+    })
+
+    const result = await handleFetch({ url: 'https://api.example.com/data' }, deps)
+    const parsed = JSON.parse(result.content[0].text)
+
+    expect(parsed.creditsRemaining).toBeNull()
+    expect(deps.credentialStore.updateBalance).not.toHaveBeenCalled()
+  })
+
   it('returns error on network failure', async () => {
     const deps = makeDeps({
       fetchFn: vi.fn().mockRejectedValue(new Error('ECONNREFUSED')) as unknown as typeof fetch,

@@ -111,9 +111,9 @@ export function registerPayTool(server: McpServer, deps: PayDeps): void {
     {
       description: 'Pay a specific L402 invoice. Use this when you want to reason about costs before paying rather than auto-paying via l402_fetch. Can reuse a cached challenge from l402_discover by passing just the paymentHash. Methods: "nwc" (autonomous Lightning), "cashu" (autonomous ecash), "human" (present QR code and poll for settlement).',
       inputSchema: {
-        invoice: z.string().optional().describe('BOLT-11 invoice to pay. Optional if paymentHash matches a cached challenge from l402_discover.'),
-        macaroon: z.string().optional().describe('Macaroon from the L402 challenge. Optional if paymentHash matches a cached challenge.'),
-        paymentHash: z.string().optional().describe('Payment hash to look up cached challenge from l402_discover.'),
+        invoice: z.string().max(20_000).optional().describe('BOLT-11 invoice to pay. Optional if paymentHash matches a cached challenge from l402_discover.'),
+        macaroon: z.string().max(10_000).optional().describe('Macaroon from the L402 challenge. Optional if paymentHash matches a cached challenge.'),
+        paymentHash: z.string().max(128).optional().describe('Payment hash to look up cached challenge from l402_discover.'),
         method: z.enum(['nwc', 'cashu', 'human']).optional().describe('Payment method override. Defaults to wallet priority: NWC > Cashu > human.'),
       },
     },
