@@ -83,8 +83,8 @@ export async function handleBuyCredits(
     }
     const { bolt11: invoice, macaroon, credit_sats: creditSats } = validated.data
 
-    // Check per-minute spend limit before paying
-    if (deps.spendTracker.wouldExceed(args.amountSats, deps.maxSpendPerMinuteSats)) {
+    // Atomic check-and-record: prevents TOCTOU race between limit check and payment
+    if (!deps.spendTracker.tryRecord(args.amountSats, deps.maxSpendPerMinuteSats)) {
       return {
         content: [{
           type: 'text' as const,
@@ -97,7 +97,6 @@ export async function handleBuyCredits(
     const payResult = await deps.payInvoice(invoice, args.method)
 
     if (payResult.paid && payResult.preimage) {
-      deps.spendTracker.record(args.amountSats)
       const decoded = deps.decodeBolt11(invoice)
       deps.storeCredential(origin, macaroon, payResult.preimage, decoded.paymentHash ?? '')
 

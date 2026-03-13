@@ -144,6 +144,56 @@ describe('handleBuyCredits', () => {
     expect(result.isError).toBe(true)
   })
 
+  it('uses atomic tryRecord to prevent TOCTOU spend-limit bypass', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        bolt11: 'lnbc9000n1test',
+        macaroon: 'mac789',
+        credit_sats: 9000,
+      }),
+    })
+
+    const payInvoice = vi.fn().mockResolvedValue({ paid: true, preimage: 'aabb', method: 'nwc' })
+    const decodeBolt11 = vi.fn().mockReturnValue({ paymentHash: 'hash789', costSats: 9000, expiry: 3600 })
+    const storeCredential = vi.fn()
+    const spendTracker = new SpendTracker()
+
+    // First purchase: 9000 sats against 10000 limit — should succeed
+    const result1 = await handleBuyCredits(
+      { url: 'https://api.example.com/data', amountSats: 9000 },
+      {
+        fetchFn: mockFetch as unknown as typeof fetch,
+        payInvoice,
+        storeCredential,
+        decodeBolt11,
+        maxSpendPerMinuteSats: 10000,
+        spendTracker,
+      },
+    )
+    const parsed1 = JSON.parse(result1.content[0].text)
+    expect(parsed1.paid).toBe(true)
+
+    // Second purchase: 9000 sats again — should be blocked by tryRecord
+    const result2 = await handleBuyCredits(
+      { url: 'https://api.example.com/data', amountSats: 9000 },
+      {
+        fetchFn: mockFetch as unknown as typeof fetch,
+        payInvoice,
+        storeCredential,
+        decodeBolt11,
+        maxSpendPerMinuteSats: 10000,
+        spendTracker,
+      },
+    )
+    const parsed2 = JSON.parse(result2.content[0].text)
+    expect(parsed2.error).toContain('spend limit')
+    expect(result2.isError).toBe(true)
+    // payInvoice should only have been called once
+    expect(payInvoice).toHaveBeenCalledTimes(1)
+  })
+
   it('returns error when payment fails', async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,

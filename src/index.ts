@@ -87,10 +87,17 @@ async function payInvoice(invoice: string, method?: WalletMethod): Promise<{ pai
 }
 
 // Helper: store credential — validates preimage to prevent credential poisoning
+const HEX_RE = /^[0-9a-fA-F]+$/
 function storeCredential(origin: string, macaroon: string, preimage: string, paymentHash: string, server: 'toll-booth' | null = null): void {
   if (!preimage || typeof preimage !== 'string' || preimage.length === 0) {
     try { origin = new URL(origin).hostname } catch { origin = '(invalid)' }
     console.error(`[l402-mcp] Refusing to store credential for ${origin}: missing or empty preimage`)
+    return
+  }
+  // Preimage is sent in Authorization headers — must be valid hex to prevent injection
+  if (!HEX_RE.test(preimage)) {
+    try { origin = new URL(origin).hostname } catch { origin = '(invalid)' }
+    console.error(`[l402-mcp] Refusing to store credential for ${origin}: preimage contains non-hex characters`)
     return
   }
   credentialStore.set(origin, {
@@ -177,6 +184,15 @@ if (config.transport === 'http') {
   app.set('trust proxy', false) // Prevent X-Forwarded-For spoofing of rate limiter
   app.use(cors({ origin: config.corsOrigin }))
   app.use(express.json({ limit: '100kb' }))
+
+  // Security headers — defence in depth for HTTP transport
+  app.use((_req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff')
+    res.setHeader('X-Frame-Options', 'DENY')
+    res.setHeader('Cache-Control', 'no-store')
+    res.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'")
+    next()
+  })
 
   // Simple sliding-window rate limiter (100 requests per 60s per IP)
   const RATE_WINDOW_MS = 60_000
