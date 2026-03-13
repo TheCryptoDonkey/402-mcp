@@ -89,6 +89,7 @@ async function payInvoice(invoice: string, method?: WalletMethod): Promise<{ pai
 // Helper: store credential — validates preimage to prevent credential poisoning
 function storeCredential(origin: string, macaroon: string, preimage: string, paymentHash: string, server: 'toll-booth' | null = null): void {
   if (!preimage || typeof preimage !== 'string' || preimage.length === 0) {
+    try { origin = new URL(origin).hostname } catch { origin = '(invalid)' }
     console.error(`[l402-mcp] Refusing to store credential for ${origin}: missing or empty preimage`)
     return
   }
@@ -173,6 +174,7 @@ if (config.transport === 'http') {
   )
 
   const app = express()
+  app.set('trust proxy', false) // Prevent X-Forwarded-For spoofing of rate limiter
   app.use(cors({ origin: config.corsOrigin }))
   app.use(express.json({ limit: '100kb' }))
 
