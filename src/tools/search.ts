@@ -1,0 +1,134 @@
+import { z } from 'zod'
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { NostrEvent } from 'nostr-tools/core'
+
+const DEFAULT_RELAYS = [
+  'wss://relay.damus.io',
+  'wss://relay.primal.net',
+  'wss://nos.lol',
+]
+
+const KIND_L402_ANNOUNCE = 31402
+
+export interface SearchDeps {
+  subscribeEvents: (relays: string[], kinds: number[], timeout: number) => Promise<NostrEvent[]>
+}
+
+export interface ParsedService {
+  name: string | undefined
+  url: string | undefined
+  about: string | undefined
+  pubkey: string
+  paymentMethods: string[]
+  pricing: { capability: string; amount: string; unit: string }[]
+  topics: string[]
+  capabilities: { name: string; description: string }[]
+}
+
+/** Extract service metadata from a kind 31402 Nostr event. */
+export function parseAnnounceEvent(event: NostrEvent): ParsedService {
+  const getTag = (key: string): string | undefined =>
+    event.tags.find(t => t[0] === key)?.[1]
+
+  const getAllTags = (key: string): string[][] =>
+    event.tags.filter(t => t[0] === key)
+
+  const paymentMethods = getAllTags('pmi').map(t => t[1]).filter(Boolean)
+  const topics = getAllTags('t').map(t => t[1]).filter(Boolean)
+
+  const pricing = getAllTags('price').map(t => ({
+    capability: t[1] ?? '',
+    amount: t[2] ?? '',
+    unit: t[3] ?? '',
+  }))
+
+  let capabilities: { name: string; description: string }[] = []
+  try {
+    const parsed = JSON.parse(event.content)
+    if (Array.isArray(parsed?.capabilities)) {
+      capabilities = parsed.capabilities
+    }
+  } catch {
+    // Invalid JSON — capabilities remain empty
+  }
+
+  return {
+    name: getTag('name'),
+    url: getTag('url'),
+    about: getTag('about'),
+    pubkey: event.pubkey,
+    paymentMethods,
+    pricing,
+    topics,
+    capabilities,
+  }
+}
+
+/** Search for L402 services by querying Nostr relays for kind 31402 events. */
+export async function handleSearch(
+  args: { query: string; relays?: string[]; topics?: string[]; paymentMethod?: string; maxResults?: number; timeout?: number },
+  deps: SearchDeps,
+) {
+  const relays = args.relays ?? DEFAULT_RELAYS
+  const timeout = args.timeout ?? 5000
+  const maxResults = args.maxResults ?? 20
+  const queryLower = args.query.toLowerCase()
+
+  const events = await deps.subscribeEvents(relays, [KIND_L402_ANNOUNCE], timeout)
+
+  let services = events.map(parseAnnounceEvent)
+
+  // Filter by query text — match against name, about, and capability descriptions
+  if (queryLower) {
+    services = services.filter(svc => {
+      const searchable = [
+        svc.name ?? '',
+        svc.about ?? '',
+        ...svc.topics,
+        ...svc.capabilities.map(c => `${c.name} ${c.description}`),
+      ].join(' ').toLowerCase()
+
+      return searchable.includes(queryLower)
+    })
+  }
+
+  // Filter by payment method
+  if (args.paymentMethod) {
+    services = services.filter(svc =>
+      svc.paymentMethods.includes(args.paymentMethod!),
+    )
+  }
+
+  // Filter by topics — service must have at least one matching topic
+  if (args.topics && args.topics.length > 0) {
+    const topicSet = new Set(args.topics.map(t => t.toLowerCase()))
+    services = services.filter(svc =>
+      svc.topics.some(t => topicSet.has(t.toLowerCase())),
+    )
+  }
+
+  // Limit results
+  const results = services.slice(0, maxResults)
+
+  return {
+    content: [{ type: 'text' as const, text: JSON.stringify(results, null, 2) }],
+  }
+}
+
+export function registerSearchTool(server: McpServer, deps: SearchDeps): void {
+  server.registerTool(
+    'l402_search',
+    {
+      description: 'Search for L402 services on Nostr. Discovers paid APIs by querying relay announcements (kind 31402). Returns service names, URLs, pricing, and payment methods. Use the URL with l402_discover or l402_fetch to interact.',
+      inputSchema: {
+        query: z.string().max(200).describe('Search query to match against service names, descriptions, and capabilities'),
+        relays: z.array(z.url()).max(10).optional().describe('Nostr relay URLs to query (defaults to popular public relays)'),
+        topics: z.array(z.string().max(50)).max(10).optional().describe('Filter by topic tags (e.g. ["ai", "data"])'),
+        paymentMethod: z.string().max(100).optional().describe('Filter by payment method (e.g. "bitcoin-lightning-bolt11", "bitcoin-cashu")'),
+        maxResults: z.int().min(1).max(100).optional().describe('Maximum number of results to return (default 20)'),
+        timeout: z.int().min(1000).max(30000).optional().describe('Relay subscription timeout in milliseconds (default 5000)'),
+      },
+    },
+    async (args) => handleSearch(args, deps),
+  )
+}

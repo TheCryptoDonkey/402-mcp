@@ -1,0 +1,269 @@
+import { describe, it, expect } from 'vitest'
+import { parseAnnounceEvent, handleSearch, type SearchDeps } from '../../src/tools/search.js'
+import type { NostrEvent } from 'nostr-tools/core'
+
+function makeEvent(overrides: Partial<NostrEvent> & { tags?: string[][] } = {}): NostrEvent {
+  return {
+    kind: 31402,
+    pubkey: 'abc123pubkey',
+    id: 'evt1',
+    sig: 'sig1',
+    created_at: Math.floor(Date.now() / 1000),
+    content: JSON.stringify({
+      capabilities: [{ name: 'chat', description: 'Chat completion' }],
+    }),
+    tags: [
+      ['d', 'svc-alpha'],
+      ['name', 'Alpha Service'],
+      ['url', 'https://alpha.example.com'],
+      ['about', 'An AI chat service'],
+      ['pmi', 'bitcoin-lightning-bolt11'],
+      ['pmi', 'bitcoin-cashu'],
+      ['price', 'chat', '10', 'sats'],
+      ['t', 'ai'],
+      ['t', 'inference'],
+    ],
+    ...overrides,
+  }
+}
+
+function mockDeps(events: NostrEvent[]): SearchDeps {
+  return {
+    subscribeEvents: async () => events,
+  }
+}
+
+describe('parseAnnounceEvent', () => {
+  it('extracts name, url, about, pubkey, paymentMethods, pricing, and topics', () => {
+    const event = makeEvent()
+    const result = parseAnnounceEvent(event)
+
+    expect(result.name).toBe('Alpha Service')
+    expect(result.url).toBe('https://alpha.example.com')
+    expect(result.about).toBe('An AI chat service')
+    expect(result.pubkey).toBe('abc123pubkey')
+    expect(result.paymentMethods).toEqual(['bitcoin-lightning-bolt11', 'bitcoin-cashu'])
+    expect(result.pricing).toEqual([{ capability: 'chat', amount: '10', unit: 'sats' }])
+    expect(result.topics).toEqual(['ai', 'inference'])
+  })
+
+  it('handles missing optional tags gracefully', () => {
+    const event = makeEvent({
+      tags: [
+        ['d', 'minimal'],
+        ['url', 'https://minimal.example.com'],
+      ],
+      content: '',
+    })
+    const result = parseAnnounceEvent(event)
+
+    expect(result.name).toBeUndefined()
+    expect(result.url).toBe('https://minimal.example.com')
+    expect(result.about).toBeUndefined()
+    expect(result.paymentMethods).toEqual([])
+    expect(result.pricing).toEqual([])
+    expect(result.topics).toEqual([])
+  })
+
+  it('parses capabilities from content JSON', () => {
+    const event = makeEvent()
+    const result = parseAnnounceEvent(event)
+
+    expect(result.capabilities).toEqual([
+      { name: 'chat', description: 'Chat completion' },
+    ])
+  })
+
+  it('returns empty capabilities for invalid content JSON', () => {
+    const event = makeEvent({ content: 'not-json' })
+    const result = parseAnnounceEvent(event)
+
+    expect(result.capabilities).toEqual([])
+  })
+})
+
+describe('handleSearch', () => {
+  it('returns matching services from mock events', async () => {
+    const events = [makeEvent()]
+    const result = await handleSearch({ query: 'chat' }, mockDeps(events))
+    const parsed = JSON.parse(result.content[0].text)
+
+    expect(parsed).toHaveLength(1)
+    expect(parsed[0].name).toBe('Alpha Service')
+    expect(parsed[0].url).toBe('https://alpha.example.com')
+    expect(parsed[0].paymentMethods).toEqual(['bitcoin-lightning-bolt11', 'bitcoin-cashu'])
+  })
+
+  it('filters by payment method', async () => {
+    const bolt11Event = makeEvent({
+      id: 'evt-bolt11',
+      tags: [
+        ['d', 'bolt11-only'],
+        ['name', 'Bolt11 Service'],
+        ['url', 'https://bolt11.example.com'],
+        ['pmi', 'bitcoin-lightning-bolt11'],
+        ['t', 'ai'],
+      ],
+    })
+    const cashuEvent = makeEvent({
+      id: 'evt-cashu',
+      pubkey: 'def456pubkey',
+      tags: [
+        ['d', 'cashu-only'],
+        ['name', 'Cashu Service'],
+        ['url', 'https://cashu.example.com'],
+        ['pmi', 'bitcoin-cashu'],
+        ['t', 'ai'],
+      ],
+    })
+    const events = [bolt11Event, cashuEvent]
+
+    const result = await handleSearch(
+      { query: 'ai', paymentMethod: 'bitcoin-cashu' },
+      mockDeps(events),
+    )
+    const parsed = JSON.parse(result.content[0].text)
+
+    expect(parsed).toHaveLength(1)
+    expect(parsed[0].name).toBe('Cashu Service')
+  })
+
+  it('filters by topic tags', async () => {
+    const aiEvent = makeEvent({
+      id: 'evt-ai',
+      tags: [
+        ['d', 'ai-svc'],
+        ['name', 'AI Service'],
+        ['url', 'https://ai.example.com'],
+        ['pmi', 'bitcoin-lightning-bolt11'],
+        ['t', 'ai'],
+        ['t', 'inference'],
+      ],
+    })
+    const weatherEvent = makeEvent({
+      id: 'evt-weather',
+      pubkey: 'weather-pubkey',
+      tags: [
+        ['d', 'weather-svc'],
+        ['name', 'Weather Service'],
+        ['url', 'https://weather.example.com'],
+        ['pmi', 'bitcoin-lightning-bolt11'],
+        ['t', 'weather'],
+        ['t', 'data'],
+      ],
+    })
+    const events = [aiEvent, weatherEvent]
+
+    const result = await handleSearch(
+      { query: '', topics: ['weather'] },
+      mockDeps(events),
+    )
+    const parsed = JSON.parse(result.content[0].text)
+
+    expect(parsed).toHaveLength(1)
+    expect(parsed[0].name).toBe('Weather Service')
+  })
+
+  it('returns empty array when no matches', async () => {
+    const events = [makeEvent()]
+    const result = await handleSearch(
+      { query: 'nonexistent-service-xyz' },
+      mockDeps(events),
+    )
+    const parsed = JSON.parse(result.content[0].text)
+
+    expect(parsed).toEqual([])
+  })
+
+  it('respects maxResults', async () => {
+    const events = Array.from({ length: 5 }, (_, i) =>
+      makeEvent({
+        id: `evt-${i}`,
+        pubkey: `pubkey-${i}`,
+        tags: [
+          ['d', `svc-${i}`],
+          ['name', `Service ${i}`],
+          ['url', `https://svc${i}.example.com`],
+          ['pmi', 'bitcoin-lightning-bolt11'],
+          ['t', 'ai'],
+        ],
+      }),
+    )
+
+    const result = await handleSearch(
+      { query: 'ai', maxResults: 2 },
+      mockDeps(events),
+    )
+    const parsed = JSON.parse(result.content[0].text)
+
+    expect(parsed).toHaveLength(2)
+  })
+
+  it('passes relays and timeout to subscribeEvents', async () => {
+    const customRelays = ['wss://relay1.example.com', 'wss://relay2.example.com']
+    const customTimeout = 8000
+    let capturedRelays: string[] = []
+    let capturedTimeout = 0
+
+    const deps: SearchDeps = {
+      subscribeEvents: async (relays, _kinds, timeout) => {
+        capturedRelays = relays
+        capturedTimeout = timeout
+        return []
+      },
+    }
+
+    await handleSearch(
+      { query: 'test', relays: customRelays, timeout: customTimeout },
+      deps,
+    )
+
+    expect(capturedRelays).toEqual(customRelays)
+    expect(capturedTimeout).toBe(customTimeout)
+  })
+
+  it('uses default relays and timeout when not specified', async () => {
+    let capturedRelays: string[] = []
+    let capturedTimeout = 0
+
+    const deps: SearchDeps = {
+      subscribeEvents: async (relays, _kinds, timeout) => {
+        capturedRelays = relays
+        capturedTimeout = timeout
+        return []
+      },
+    }
+
+    await handleSearch({ query: 'test' }, deps)
+
+    expect(capturedRelays.length).toBeGreaterThan(0)
+    expect(capturedTimeout).toBe(5000)
+  })
+
+  it('matches query against name, about, and capabilities', async () => {
+    const event = makeEvent({
+      tags: [
+        ['d', 'svc-hidden'],
+        ['name', 'Generic API'],
+        ['url', 'https://generic.example.com'],
+        ['about', 'Provides image generation'],
+        ['pmi', 'bitcoin-lightning-bolt11'],
+      ],
+      content: JSON.stringify({
+        capabilities: [{ name: 'generate', description: 'Generate images' }],
+      }),
+    })
+
+    // Match on about
+    const r1 = await handleSearch({ query: 'image' }, mockDeps([event]))
+    expect(JSON.parse(r1.content[0].text)).toHaveLength(1)
+
+    // Match on capability description
+    const r2 = await handleSearch({ query: 'generate' }, mockDeps([event]))
+    expect(JSON.parse(r2.content[0].text)).toHaveLength(1)
+
+    // Match on name
+    const r3 = await handleSearch({ query: 'Generic' }, mockDeps([event]))
+    expect(JSON.parse(r3.content[0].text)).toHaveLength(1)
+  })
+})
