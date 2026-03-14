@@ -1,3 +1,11 @@
+# [3.1.0](https://github.com/TheCryptoDonkey/402-mcp/compare/v3.0.0...v3.1.0) (2026-03-14)
+
+
+### Features
+
+* surface status tag in search results, skip DOWN/CLOSED by default ([df2d982](https://github.com/TheCryptoDonkey/402-mcp/commit/df2d982754083a41aa53da2e1f62ed5d9a684103))
+* use relay-side tag filters for topic and payment method discovery ([305fe7f](https://github.com/TheCryptoDonkey/402-mcp/commit/305fe7f39d95268e1c058e735eb53b1b1e3d663c))
+
 # [3.0.0](https://github.com/TheCryptoDonkey/402-mcp/compare/v2.1.0...v3.0.0) (2026-03-14)
 
 
