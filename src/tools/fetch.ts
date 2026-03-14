@@ -12,10 +12,10 @@ import { filterResponseHeaders } from './safe-headers.js'
 const HEX_RE = /^[0-9a-fA-F]+$/
 const MACAROON_RE = /^[A-Za-z0-9+/_\-=]+$/
 
-/** Headers that must not be set by the caller (hop-by-hop or security-sensitive). */
+/** Headers that must not be set by the caller (hop-by-hop). */
 const BLOCKED_HEADERS = new Set([
   'host', 'transfer-encoding', 'connection', 'upgrade',
-  'proxy-authorization', 'te', 'trailer', 'authorization',
+  'proxy-authorization', 'te', 'trailer',
 ])
 
 export interface FetchDeps {

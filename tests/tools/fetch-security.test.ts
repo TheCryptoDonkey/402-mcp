@@ -106,7 +106,6 @@ describe('handleFetch security', () => {
       headers: {
         'Host': 'evil.example.com',
         'Transfer-Encoding': 'chunked',
-        'Authorization': 'Bearer stolen',
         'X-Custom': 'allowed',
       },
     }, deps)
@@ -114,7 +113,42 @@ describe('handleFetch security', () => {
     const callHeaders = fetchMock.mock.calls[0][1].headers
     expect(callHeaders['Host']).toBeUndefined()
     expect(callHeaders['Transfer-Encoding']).toBeUndefined()
-    expect(callHeaders['Authorization']).toBeUndefined()
     expect(callHeaders['X-Custom']).toBe('allowed')
+  })
+
+  it('preserves user Authorization when no L402 credentials exist', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(mockResponse(200))
+    const deps = makeDeps({
+      fetchFn: fetchMock as unknown as typeof fetch,
+    })
+
+    await handleFetch({
+      url: 'https://api.example.com/data',
+      headers: { 'Authorization': 'Bearer my-api-key' },
+    }, deps)
+
+    const callHeaders = fetchMock.mock.calls[0][1].headers
+    expect(callHeaders['Authorization']).toBe('Bearer my-api-key')
+  })
+
+  it('overwrites user Authorization when L402 credentials exist', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(mockResponse(200))
+    const deps = makeDeps({
+      fetchFn: fetchMock as unknown as typeof fetch,
+      credentialStore: {
+        get: vi.fn().mockReturnValue({ macaroon: 'bWFjMQ==', preimage: 'abcdef' }),
+        set: vi.fn(),
+        updateBalance: vi.fn(),
+        updateLastUsed: vi.fn(),
+      } as unknown as FetchDeps['credentialStore'],
+    })
+
+    await handleFetch({
+      url: 'https://api.example.com/data',
+      headers: { 'Authorization': 'Bearer my-api-key' },
+    }, deps)
+
+    const callHeaders = fetchMock.mock.calls[0][1].headers
+    expect(callHeaders['Authorization']).toBe('L402 bWFjMQ==:abcdef')
   })
 })
