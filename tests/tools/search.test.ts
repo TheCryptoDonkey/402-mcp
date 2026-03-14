@@ -81,6 +81,15 @@ describe('parseAnnounceEvent', () => {
 
     expect(result.capabilities).toEqual([])
   })
+
+  it('extracts status tag from event', () => {
+    const event = makeEvent({ tags: [...makeEvent().tags, ['status', 'UP']] })
+    expect(parseAnnounceEvent(event).status).toBe('UP')
+  })
+
+  it('status is undefined when tag is missing', () => {
+    expect(parseAnnounceEvent(makeEvent()).status).toBeUndefined()
+  })
 })
 
 describe('handleSearch', () => {
@@ -265,6 +274,28 @@ describe('handleSearch', () => {
 
     expect(capturedRelays.length).toBeGreaterThan(0)
     expect(capturedTimeout).toBe(5000)
+  })
+
+  it('filters out DOWN and CLOSED services by default', async () => {
+    const upEvent = makeEvent({ id: 'up', tags: [...makeEvent().tags, ['status', 'UP']] })
+    const downEvent = makeEvent({ id: 'down', pubkey: 'p2', tags: [...makeEvent().tags, ['status', 'DOWN']] })
+    const closedEvent = makeEvent({ id: 'closed', pubkey: 'p3', tags: [...makeEvent().tags, ['status', 'CLOSED']] })
+    const noStatusEvent = makeEvent({ id: 'none', pubkey: 'p4' })
+
+    const result = await handleSearch({ query: '' }, mockDeps([upEvent, downEvent, closedEvent, noStatusEvent]))
+    const parsed = JSON.parse(result.content[0].text)
+
+    expect(parsed).toHaveLength(2)
+    expect(parsed.map((s: { pubkey: string }) => s.pubkey)).toEqual(['abc123pubkey', 'p4'])
+  })
+
+  it('includes DOWN/CLOSED services when includeOffline is true', async () => {
+    const downEvent = makeEvent({ id: 'down', tags: [...makeEvent().tags, ['status', 'DOWN']] })
+
+    const result = await handleSearch({ query: '', includeOffline: true }, mockDeps([downEvent]))
+    const parsed = JSON.parse(result.content[0].text)
+
+    expect(parsed).toHaveLength(1)
   })
 
   it('matches query against name, about, and capabilities', async () => {
