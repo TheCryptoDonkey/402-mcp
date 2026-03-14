@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { NostrEvent } from 'nostr-tools/core'
 import type { SubscribeFilters } from './nostr-subscribe.js'
+import { safeErrorMessage } from './safe-error.js'
 
 const DEFAULT_RELAYS = [
   'wss://relay.damus.io',
@@ -79,39 +80,49 @@ export async function handleSearch(
   args: { query: string; relays?: string[]; topics?: string[]; paymentMethod?: string; maxResults?: number; timeout?: number },
   deps: SearchDeps,
 ) {
-  const relays = args.relays ?? DEFAULT_RELAYS
-  const timeout = args.timeout ?? 5000
-  const maxResults = args.maxResults ?? 20
-  const queryLower = args.query.toLowerCase()
+  try {
+    const relays = args.relays ?? DEFAULT_RELAYS
+    const timeout = args.timeout ?? 5000
+    const maxResults = args.maxResults ?? 20
+    const queryLower = args.query.toLowerCase()
 
-  // Build relay-side tag filters — relays handle topic and payment method filtering
-  const relayFilters: SubscribeFilters = {}
-  if (args.topics?.length) relayFilters['#t'] = args.topics
-  if (args.paymentMethod) relayFilters['#pmi'] = [args.paymentMethod]
+    // Build relay-side tag filters — relays handle topic and payment method filtering
+    const relayFilters: SubscribeFilters = {}
+    if (args.topics?.length) relayFilters['#t'] = args.topics
+    if (args.paymentMethod) relayFilters['#pmi'] = [args.paymentMethod]
 
-  const events = await deps.subscribeEvents(relays, [KIND_L402_ANNOUNCE], timeout, relayFilters)
+    const events = await deps.subscribeEvents(relays, [KIND_L402_ANNOUNCE], timeout, relayFilters)
 
-  let services = events.map(parseAnnounceEvent)
+    let services = events.map(parseAnnounceEvent)
 
-  // Filter by query text — relays cannot do substring search so this remains client-side
-  if (queryLower) {
-    services = services.filter(svc => {
-      const searchable = [
-        svc.name ?? '',
-        svc.about ?? '',
-        ...svc.topics,
-        ...svc.capabilities.map(c => `${c.name} ${c.description}`),
-      ].join(' ').toLowerCase()
+    // Filter by query text — relays cannot do substring search so this remains client-side
+    if (queryLower) {
+      services = services.filter(svc => {
+        const searchable = [
+          svc.name ?? '',
+          svc.about ?? '',
+          ...svc.topics,
+          ...svc.capabilities.map(c => `${c.name} ${c.description}`),
+        ].join(' ').toLowerCase()
 
-      return searchable.includes(queryLower)
-    })
-  }
+        return searchable.includes(queryLower)
+      })
+    }
 
-  // Limit results
-  const results = services.slice(0, maxResults)
+    // Limit results
+    const results = services.slice(0, maxResults)
 
-  return {
-    content: [{ type: 'text' as const, text: JSON.stringify(results, null, 2) }],
+    return {
+      content: [{ type: 'text' as const, text: JSON.stringify(results, null, 2) }],
+    }
+  } catch (err) {
+    return {
+      content: [{
+        type: 'text' as const,
+        text: JSON.stringify({ error: safeErrorMessage(err) }),
+      }],
+      isError: true as const,
+    }
   }
 }
 

@@ -55,7 +55,7 @@ export function isEncrypted(data: unknown): data is EncryptedPayload {
 
 function loadOrCreateFallbackKey(): Buffer {
   // Try to create atomically first (O_CREAT | O_EXCL fails if file exists)
-  mkdirSync(dirname(FALLBACK_KEY_PATH), { recursive: true })
+  mkdirSync(dirname(FALLBACK_KEY_PATH), { recursive: true, mode: 0o700 })
   try {
     const newKey = randomBytes(32)
     const fd = openSync(FALLBACK_KEY_PATH, fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL, 0o600)

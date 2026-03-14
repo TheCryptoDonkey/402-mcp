@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { handlePay } from '../../src/tools/pay.js'
 import { ChallengeCache } from '../../src/l402/challenge-cache.js'
+import { SpendTracker } from '../../src/spend-tracker.js'
 
 function hexHash(n: number): string {
   return n.toString(16).padStart(64, '0')
@@ -13,6 +14,9 @@ const HASH_4 = hexHash(4)
 
 const baseDeps = {
   fetchFn: vi.fn() as unknown as typeof fetch,
+  maxSpendPerMinuteSats: 10_000,
+  spendTracker: new SpendTracker(),
+  decodeBolt11: () => ({ costSats: 10, paymentHash: null, expiry: 3600 }),
 }
 
 describe('handlePay', () => {
@@ -205,11 +209,11 @@ describe('handlePay', () => {
     const result = await handlePay(
       { paymentHash: HASH_1, method: 'human' },
       {
+        ...baseDeps,
         cache,
         resolveWallet: () => humanWallet,
         storeCredential,
         maxAutoPaySats: 1000,
-        fetchFn: vi.fn() as unknown as typeof fetch,
       },
     )
 
@@ -218,5 +222,111 @@ describe('handlePay', () => {
     expect(parsed.paid).toBe(true)
     expect(parsed.preimage).toBeUndefined()
     expect(storeCredential).toHaveBeenCalled()
+  })
+
+  it('rejects invoice exceeding maxAutoPaySats', async () => {
+    const mockWallet = {
+      method: 'nwc' as const,
+      available: true,
+      payInvoice: vi.fn(),
+    }
+
+    const result = await handlePay(
+      { invoice: 'lnbc...', macaroon: 'mac123' },
+      {
+        ...baseDeps,
+        cache: new ChallengeCache(),
+        resolveWallet: () => mockWallet,
+        storeCredential: vi.fn().mockReturnValue(true),
+        maxAutoPaySats: 5,
+        decodeBolt11: () => ({ costSats: 100, paymentHash: null, expiry: 3600 }),
+      },
+    )
+
+    const parsed = JSON.parse(result.content[0].text)
+    expect(parsed.paid).toBe(false)
+    expect(parsed.reason).toContain('exceeds auto-pay limit')
+    expect(mockWallet.payInvoice).not.toHaveBeenCalled()
+  })
+
+  it('rejects when per-minute spend limit is reached', async () => {
+    const spendTracker = new SpendTracker()
+    // Fill the spend tracker to near-limit
+    spendTracker.tryRecord(9990, 10_000)
+
+    const mockWallet = {
+      method: 'nwc' as const,
+      available: true,
+      payInvoice: vi.fn(),
+    }
+
+    const result = await handlePay(
+      { invoice: 'lnbc...', macaroon: 'mac123' },
+      {
+        ...baseDeps,
+        cache: new ChallengeCache(),
+        resolveWallet: () => mockWallet,
+        storeCredential: vi.fn().mockReturnValue(true),
+        maxAutoPaySats: 1000,
+        spendTracker,
+        decodeBolt11: () => ({ costSats: 20, paymentHash: null, expiry: 3600 }),
+      },
+    )
+
+    const parsed = JSON.parse(result.content[0].text)
+    expect(parsed.paid).toBe(false)
+    expect(parsed.reason).toContain('spend limit')
+    expect(mockWallet.payInvoice).not.toHaveBeenCalled()
+  })
+
+  it('rolls back spend on payment failure', async () => {
+    const spendTracker = new SpendTracker()
+
+    const mockWallet = {
+      method: 'nwc' as const,
+      available: true,
+      payInvoice: vi.fn().mockResolvedValue({ paid: false, method: 'nwc' }),
+    }
+
+    await handlePay(
+      { invoice: 'lnbc...', macaroon: 'mac123' },
+      {
+        ...baseDeps,
+        cache: new ChallengeCache(),
+        resolveWallet: () => mockWallet,
+        storeCredential: vi.fn().mockReturnValue(true),
+        maxAutoPaySats: 1000,
+        spendTracker,
+        decodeBolt11: () => ({ costSats: 50, paymentHash: null, expiry: 3600 }),
+      },
+    )
+
+    // After rollback, spend should be 0
+    expect(spendTracker.recentSpend()).toBe(0)
+  })
+
+  it('returns safe error when wallet throws', async () => {
+    const mockWallet = {
+      method: 'nwc' as const,
+      available: true,
+      payInvoice: vi.fn().mockRejectedValue(new Error('NWC connection failed: secret=abc123')),
+    }
+
+    const result = await handlePay(
+      { invoice: 'lnbc...', macaroon: 'mac123' },
+      {
+        ...baseDeps,
+        cache: new ChallengeCache(),
+        resolveWallet: () => mockWallet,
+        storeCredential: vi.fn().mockReturnValue(true),
+        maxAutoPaySats: 1000,
+      },
+    )
+
+    const parsed = JSON.parse(result.content[0].text)
+    expect(parsed.error).toBeDefined()
+    expect(result.isError).toBe(true)
+    // Should not leak the raw error with potential secrets
+    expect(parsed.error).not.toContain('secret=abc123')
   })
 })

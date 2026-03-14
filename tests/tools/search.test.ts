@@ -267,6 +267,18 @@ describe('handleSearch', () => {
     expect(capturedTimeout).toBe(5000)
   })
 
+  it('returns safe error when subscribeEvents throws', async () => {
+    const deps: SearchDeps = {
+      subscribeEvents: async () => { throw new Error('relay connection failed: ws://internal.relay:7000') },
+    }
+
+    const result = await handleSearch({ query: 'test' }, deps)
+    const parsed = JSON.parse(result.content[0].text)
+
+    expect(parsed.error).toBeDefined()
+    expect(result.isError).toBe(true)
+  })
+
   it('matches query against name, about, and capabilities', async () => {
     const event = makeEvent({
       tags: [

@@ -157,6 +157,9 @@ registerPayTool(server, {
   resolveWallet: getWallet,
   storeCredential,
   maxAutoPaySats: config.maxAutoPaySats,
+  maxSpendPerMinuteSats: config.maxSpendPerMinuteSats,
+  spendTracker,
+  decodeBolt11,
   fetchFn: resilientFetch,
 })
 

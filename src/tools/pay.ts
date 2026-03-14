@@ -3,6 +3,8 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { ChallengeCache } from '../l402/challenge-cache.js'
 import type { WalletMethod, WalletProvider } from '../wallet/types.js'
 import type { ResilientFetchOptions } from '../fetch/resilient-fetch.js'
+import type { DecodedInvoice } from '../l402/bolt11.js'
+import type { SpendTracker } from '../spend-tracker.js'
 import { safeErrorMessage } from './safe-error.js'
 
 export interface PayDeps {
@@ -10,6 +12,9 @@ export interface PayDeps {
   resolveWallet: (method?: WalletMethod) => WalletProvider | undefined
   storeCredential: (origin: string, macaroon: string, preimage: string, paymentHash: string, server: 'toll-booth' | null) => boolean
   maxAutoPaySats: number
+  maxSpendPerMinuteSats: number
+  spendTracker: SpendTracker
+  decodeBolt11: (invoice: string) => DecodedInvoice
   fetchFn: (url: string | URL, init?: RequestInit, options?: ResilientFetchOptions) => Promise<Response>
 }
 
@@ -68,39 +73,79 @@ export async function handlePay(
     }
   }
 
-  // Set server origin for human wallet polling
-  if (wallet.method === 'human' && cachedUrl && 'setServerOrigin' in wallet) {
-    (wallet as any).setServerOrigin(new URL(cachedUrl).origin)
-  }
+  try {
+    // Decode invoice to determine cost and enforce spend limits
+    const decoded = deps.decodeBolt11(invoice)
+    const costSats = decoded.costSats
 
-  const result = await wallet.payInvoice(invoice)
-
-  let credentialsStored = false
-  if (result.paid && result.preimage) {
-    const origin = cachedUrl ? new URL(cachedUrl).origin : ''
-    if (origin) {
-      credentialsStored = deps.storeCredential(
-        origin,
-        macaroon,
-        result.preimage,
-        paymentHash ?? '',
-        null,
-      )
+    if (costSats !== null && costSats > deps.maxAutoPaySats) {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({ paid: false, reason: `Invoice cost (${costSats} sats) exceeds auto-pay limit (${deps.maxAutoPaySats} sats)` }),
+        }],
+        isError: true as const,
+      }
     }
 
-    // Remove from cache
-    if (paymentHash) deps.cache.delete(paymentHash)
-  }
+    // Atomic spend-limit check before payment
+    if (costSats !== null && !deps.spendTracker.tryRecord(costSats, deps.maxSpendPerMinuteSats)) {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({ paid: false, reason: 'Per-minute spend limit reached.' }),
+        }],
+        isError: true as const,
+      }
+    }
 
-  return {
-    content: [{
-      type: 'text' as const,
-      text: JSON.stringify({
-        paid: result.paid,
-        credentialsStored,
-        method: result.method,
-      }, null, 2),
-    }],
+    // Set server origin for human wallet polling
+    if (wallet.method === 'human' && cachedUrl && 'setServerOrigin' in wallet) {
+      (wallet as any).setServerOrigin(new URL(cachedUrl).origin)
+    }
+
+    const result = await wallet.payInvoice(invoice)
+
+    // Roll back spend-limit reservation if payment failed
+    if ((!result.paid || !result.preimage) && costSats !== null) {
+      deps.spendTracker.unrecord(costSats)
+    }
+
+    let credentialsStored = false
+    if (result.paid && result.preimage) {
+      const origin = cachedUrl ? new URL(cachedUrl).origin : ''
+      if (origin) {
+        credentialsStored = deps.storeCredential(
+          origin,
+          macaroon,
+          result.preimage,
+          paymentHash ?? '',
+          null,
+        )
+      }
+
+      // Remove from cache
+      if (paymentHash) deps.cache.delete(paymentHash)
+    }
+
+    return {
+      content: [{
+        type: 'text' as const,
+        text: JSON.stringify({
+          paid: result.paid,
+          credentialsStored,
+          method: result.method,
+        }, null, 2),
+      }],
+    }
+  } catch (err) {
+    return {
+      content: [{
+        type: 'text' as const,
+        text: JSON.stringify({ error: safeErrorMessage(err) }),
+      }],
+      isError: true as const,
+    }
   }
 }
 
