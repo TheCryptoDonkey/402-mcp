@@ -22,6 +22,8 @@ import { registerCredentialsTool } from './tools/credentials.js'
 import { registerBalanceTool } from './tools/balance.js'
 import { registerBuyCreditsTool } from './tools/buy-credits.js'
 import { registerRedeemCashuTool } from './tools/redeem-cashu.js'
+import { registerSearchTool } from './tools/search.js'
+import { createNostrSubscriber } from './tools/nostr-subscribe.js'
 import { createResilientFetch } from './fetch/resilient-fetch.js'
 import { SpendTracker } from './spend-tracker.js'
 
@@ -171,6 +173,8 @@ registerRedeemCashuTool(server, {
     storeCredential(origin, macaroon, preimage, paymentHash, 'toll-booth'),
   removeToken: (tokenStr) => cashuTokenStore?.remove(tokenStr),
 })
+
+registerSearchTool(server, { subscribeEvents: createNostrSubscriber() })
 
 // Start transport
 if (config.transport === 'http') {
