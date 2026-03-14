@@ -160,7 +160,6 @@ describe('createCashuWallet', () => {
     // Warning was logged
     expect(warnSpy).toHaveBeenCalledWith(
       expect.stringContaining('Failed to restore change proofs'),
-      expect.any(Error),
     )
 
     warnSpy.mockRestore()
