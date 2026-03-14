@@ -26,6 +26,9 @@ export function createNostrSubscriber(): SearchDeps['subscribeEvents'] {
         if (!url.startsWith('wss://') && !url.startsWith('ws://')) {
           return
         }
+        if (url.startsWith('ws://')) {
+          console.error(`[402-mcp] Warning: connecting to unencrypted relay ${url} — subscription data may be visible to network observers. Use wss:// for production.`)
+        }
 
         try {
           const relay = await Promise.race([

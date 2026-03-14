@@ -102,6 +102,11 @@ function storeCredential(origin: string, macaroon: string, preimage: string, pay
     console.error(`[402-mcp] Refusing to store credential for ${safeOrigin}: preimage contains non-hex characters`)
     return false
   }
+  // SHA-256 preimage must be exactly 32 bytes (64 hex chars)
+  if (preimage.length !== 64) {
+    console.error(`[402-mcp] Refusing to store credential for ${safeOrigin}: preimage length ${preimage.length} (expected 64 hex chars)`)
+    return false
+  }
   // Macaroon is also sent in Authorization headers — restrict to base64-safe characters
   if (!macaroon || !MACAROON_RE.test(macaroon)) {
     console.error(`[402-mcp] Refusing to store credential for ${safeOrigin}: macaroon contains invalid characters`)
