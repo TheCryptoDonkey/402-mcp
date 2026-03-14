@@ -1,3 +1,10 @@
+## [2.0.1](https://github.com/TheCryptoDonkey/l402-mcp/compare/v2.0.0...v2.0.1) (2026-03-14)
+
+
+### Bug Fixes
+
+* exclude e2e test from prepublishOnly ([19c3fe4](https://github.com/TheCryptoDonkey/l402-mcp/commit/19c3fe4bcee8be4e1edf237ebe33b8e7a80ed162))
+
 # [2.0.0](https://github.com/TheCryptoDonkey/l402-mcp/compare/v1.0.0...v2.0.0) (2026-03-14)
 
 
