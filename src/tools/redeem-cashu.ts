@@ -94,9 +94,12 @@ export async function handleRedeemCashu(
     }
     const { token_suffix: tokenSuffix, credited: creditSats } = redeemValidated.data
 
-    // Store credential and remove spent token
+    // Store credential — only remove the Cashu token if storage succeeds,
+    // otherwise the user loses both the token and the credential.
     const stored = deps.storeCredential(origin, macaroon, tokenSuffix, paymentHash)
-    deps.removeToken(args.token)
+    if (stored) {
+      deps.removeToken(args.token)
+    }
 
     return {
       content: [{
@@ -105,6 +108,7 @@ export async function handleRedeemCashu(
           redeemed: true,
           creditsReceived: typeof creditSats === 'number' ? creditSats : null,
           credentialsStored: stored,
+          ...(stored ? {} : { warning: 'Credential validation failed — original token preserved for retry' }),
         }, null, 2),
       }],
     }
