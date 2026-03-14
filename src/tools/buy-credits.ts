@@ -114,8 +114,10 @@ export async function handleBuyCredits(
             creditsReceived: typeof creditSats === 'number' ? creditSats : null,
             credentialsStored: stored,
             method: payResult.method,
+            ...(stored ? {} : { warning: 'Payment succeeded but credential validation failed — credits may be inaccessible' }),
           }, null, 2),
         }],
+        ...(stored ? {} : { isError: true as const }),
       }
     }
 
