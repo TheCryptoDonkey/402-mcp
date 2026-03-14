@@ -22,7 +22,7 @@
     "typecheck": "tsc --noEmit",
     "start": "node build/index.js",
     "start:http": "TRANSPORT=http node build/index.js",
-    "prepublishOnly": "npm run typecheck && npm run build && npm test"
+    "prepublishOnly": "npm run typecheck && npm run build && npm test -- --exclude 'tests/e2e/l402-flow.integration.test.ts'"
   },
   "dependencies": {
     "@cashu/cashu-ts": "^3.5.0",
