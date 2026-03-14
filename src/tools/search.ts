@@ -19,7 +19,6 @@ export interface ParsedService {
   name: string | undefined
   url: string | undefined
   about: string | undefined
-  status: string | undefined
   pubkey: string
   paymentMethods: string[]
   pricing: { capability: string; amount: string; unit: string }[]
@@ -67,7 +66,6 @@ export function parseAnnounceEvent(event: NostrEvent): ParsedService {
     name: getTag('name'),
     url: getTag('url'),
     about: getTag('about'),
-    status: getTag('status'),
     pubkey: event.pubkey,
     paymentMethods,
     pricing,
@@ -78,7 +76,7 @@ export function parseAnnounceEvent(event: NostrEvent): ParsedService {
 
 /** Search for L402 services by querying Nostr relays for kind 31402 events. */
 export async function handleSearch(
-  args: { query: string; relays?: string[]; topics?: string[]; paymentMethod?: string; maxResults?: number; timeout?: number; includeOffline?: boolean },
+  args: { query: string; relays?: string[]; topics?: string[]; paymentMethod?: string; maxResults?: number; timeout?: number },
   deps: SearchDeps,
 ) {
   const relays = args.relays ?? DEFAULT_RELAYS
@@ -94,11 +92,6 @@ export async function handleSearch(
   const events = await deps.subscribeEvents(relays, [KIND_L402_ANNOUNCE], timeout, relayFilters)
 
   let services = events.map(parseAnnounceEvent)
-
-  // Skip DOWN/CLOSED services unless explicitly requested
-  if (!args.includeOffline) {
-    services = services.filter(svc => !svc.status || svc.status === 'UP')
-  }
 
   // Filter by query text — relays cannot do substring search so this remains client-side
   if (queryLower) {
@@ -134,7 +127,6 @@ export function registerSearchTool(server: McpServer, deps: SearchDeps): void {
         paymentMethod: z.string().max(100).optional().describe('Filter by payment method (e.g. "bitcoin-lightning-bolt11", "bitcoin-cashu")'),
         maxResults: z.int().min(1).max(100).optional().describe('Maximum number of results to return (default 20)'),
         timeout: z.int().min(1000).max(30000).optional().describe('Relay subscription timeout in milliseconds (default 5000)'),
-        includeOffline: z.boolean().optional().describe('Include services with DOWN or CLOSED status (default false)'),
       },
     },
     async (args) => handleSearch(args, deps),
