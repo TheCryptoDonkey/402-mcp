@@ -47,6 +47,15 @@ export function parseAnnounceEvent(event: NostrEvent): ParsedService {
     const parsed = JSON.parse(event.content)
     if (Array.isArray(parsed?.capabilities)) {
       capabilities = parsed.capabilities
+        .filter((c: unknown): c is { name: string; description: string } =>
+          typeof c === 'object' && c !== null &&
+          typeof (c as Record<string, unknown>).name === 'string' &&
+          typeof (c as Record<string, unknown>).description === 'string'
+        )
+        .map((c: { name: string; description: string }) => ({
+          name: c.name.slice(0, 500),
+          description: c.description.slice(0, 2000),
+        }))
     }
   } catch {
     // Invalid JSON — capabilities remain empty

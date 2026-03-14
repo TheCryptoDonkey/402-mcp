@@ -6,16 +6,28 @@ import type { SearchDeps } from './search.js'
  * subscribes to the given event kinds, and collects events
  * for a specified timeout period.
  */
+const MAX_EVENTS = 1000
+
 export function createNostrSubscriber(): SearchDeps['subscribeEvents'] {
   return async (relays: string[], kinds: number[], timeout: number): Promise<NostrEvent[]> => {
     const { Relay } = await import('nostr-tools/relay')
+    const { verifyEvent } = await import('nostr-tools/pure')
     const events: NostrEvent[] = []
     const connections: Array<{ close(): void }> = []
 
     const settled = await Promise.allSettled(
       relays.map(async (url) => {
+        if (!url.startsWith('wss://') && !url.startsWith('ws://')) {
+          return
+        }
+
         try {
-          const relay = await Relay.connect(url)
+          const relay = await Promise.race([
+            Relay.connect(url),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error('timeout')), 10_000)
+            ),
+          ])
           connections.push(relay)
 
           return new Promise<void>((resolve) => {
@@ -23,7 +35,9 @@ export function createNostrSubscriber(): SearchDeps['subscribeEvents'] {
               [{ kinds }],
               {
                 onevent: (event) => {
-                  events.push(event as NostrEvent)
+                  if (events.length < MAX_EVENTS && verifyEvent(event)) {
+                    events.push(event as NostrEvent)
+                  }
                 },
                 oneose: () => {
                   sub.close()
