@@ -15,7 +15,7 @@ const CreateInvoiceResponse = z.object({
 export interface BuyCreditsDeps {
   fetchFn: (url: string | URL, init?: RequestInit, options?: ResilientFetchOptions) => Promise<Response>
   payInvoice: (invoice: string, method?: WalletMethod) => Promise<{ paid: boolean; preimage?: string; method: string }>
-  storeCredential: (origin: string, macaroon: string, preimage: string, paymentHash: string) => void
+  storeCredential: (origin: string, macaroon: string, preimage: string, paymentHash: string) => boolean
   decodeBolt11: (invoice: string) => DecodedInvoice
   maxSpendPerMinuteSats: number
   spendTracker: SpendTracker
@@ -95,6 +95,11 @@ export async function handleBuyCredits(
     }
 
     const payResult = await deps.payInvoice(invoice, args.method)
+
+    // Roll back spend-limit reservation if payment failed
+    if (!payResult.paid || !payResult.preimage) {
+      deps.spendTracker.unrecord(args.amountSats)
+    }
 
     if (payResult.paid && payResult.preimage) {
       const decoded = deps.decodeBolt11(invoice)

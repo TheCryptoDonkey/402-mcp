@@ -8,7 +8,7 @@ import { safeErrorMessage } from './safe-error.js'
 export interface PayDeps {
   cache: ChallengeCache
   resolveWallet: (method?: WalletMethod) => WalletProvider | undefined
-  storeCredential: (origin: string, macaroon: string, preimage: string, paymentHash: string, server: 'toll-booth' | null) => void
+  storeCredential: (origin: string, macaroon: string, preimage: string, paymentHash: string, server: 'toll-booth' | null) => boolean
   maxAutoPaySats: number
   fetchFn: (url: string | URL, init?: RequestInit, options?: ResilientFetchOptions) => Promise<Response>
 }

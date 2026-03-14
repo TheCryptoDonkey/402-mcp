@@ -22,7 +22,7 @@ describe('handleRedeemCashu', () => {
         }),
       })
 
-    const storeCredential = vi.fn()
+    const storeCredential = vi.fn().mockReturnValue(true)
     const removeToken = vi.fn()
 
     const result = await handleRedeemCashu(
@@ -109,7 +109,7 @@ describe('handleRedeemCashu', () => {
         json: async () => ({ error: 'Token already spent' }),
       })
 
-    const storeCredential = vi.fn()
+    const storeCredential = vi.fn().mockReturnValue(true)
     const removeToken = vi.fn()
 
     const result = await handleRedeemCashu(
@@ -149,7 +149,7 @@ describe('handleRedeemCashu', () => {
         }),
       })
 
-    const storeCredential = vi.fn()
+    const storeCredential = vi.fn().mockReturnValue(true)
 
     const result = await handleRedeemCashu(
       { url: 'https://api.example.com/data', token: 'cashuAeyJ...' },

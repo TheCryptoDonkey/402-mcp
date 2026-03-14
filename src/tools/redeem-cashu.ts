@@ -16,7 +16,7 @@ const RedeemResponseSchema = z.object({
 
 export interface RedeemCashuDeps {
   fetchFn: (url: string | URL, init?: RequestInit, options?: ResilientFetchOptions) => Promise<Response>
-  storeCredential: (origin: string, macaroon: string, preimage: string, paymentHash: string) => void
+  storeCredential: (origin: string, macaroon: string, preimage: string, paymentHash: string) => boolean
   removeToken: (tokenStr: string) => void
 }
 
@@ -95,7 +95,7 @@ export async function handleRedeemCashu(
     const { token_suffix: tokenSuffix, credited: creditSats } = redeemValidated.data
 
     // Store credential and remove spent token
-    deps.storeCredential(origin, macaroon, tokenSuffix, paymentHash)
+    const stored = deps.storeCredential(origin, macaroon, tokenSuffix, paymentHash)
     deps.removeToken(args.token)
 
     return {
@@ -104,7 +104,7 @@ export async function handleRedeemCashu(
         text: JSON.stringify({
           redeemed: true,
           creditsReceived: typeof creditSats === 'number' ? creditSats : null,
-          credentialsStored: true,
+          credentialsStored: stored,
         }, null, 2),
       }],
     }
