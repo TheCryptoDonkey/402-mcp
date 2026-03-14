@@ -79,14 +79,13 @@ export async function handlePay(
   if (result.paid && result.preimage) {
     const origin = cachedUrl ? new URL(cachedUrl).origin : ''
     if (origin) {
-      deps.storeCredential(
+      credentialsStored = deps.storeCredential(
         origin,
         macaroon,
         result.preimage,
         paymentHash ?? '',
         null,
       )
-      credentialsStored = true
     }
 
     // Remove from cache

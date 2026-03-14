@@ -143,8 +143,8 @@ export async function handleFetch(
           server: serverInfo.type === 'toll-booth' ? 'toll-booth' : null,
         })
 
-        // Retry the request with new credentials
-        const retryHeaders: Record<string, string> = { ...args.headers }
+        // Retry the request with new credentials (reuse filtered headers)
+        const retryHeaders: Record<string, string> = { ...reqHeaders }
         retryHeaders['Authorization'] = `L402 ${challenge.macaroon}:${payResult.preimage}`
 
         const retryResponse = await deps.fetchFn(args.url, {

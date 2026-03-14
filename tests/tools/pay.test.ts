@@ -32,7 +32,7 @@ describe('handlePay', () => {
       available: true,
       payInvoice: vi.fn().mockResolvedValue({ paid: true, preimage: 'abc', method: 'nwc' }),
     }
-    const storeCredential = vi.fn()
+    const storeCredential = vi.fn().mockReturnValue(true)
 
     const result = await handlePay(
       { invoice: 'lnbc...', macaroon: 'mac123', paymentHash: HASH_1 },
@@ -74,7 +74,7 @@ describe('handlePay', () => {
         ...baseDeps,
         cache,
         resolveWallet: () => mockWallet,
-        storeCredential: vi.fn(),
+        storeCredential: vi.fn().mockReturnValue(true),
         maxAutoPaySats: 1000,
       },
     )
@@ -89,7 +89,7 @@ describe('handlePay', () => {
         ...baseDeps,
         cache: new ChallengeCache(),
         resolveWallet: () => undefined,
-        storeCredential: vi.fn(),
+        storeCredential: vi.fn().mockReturnValue(true),
         maxAutoPaySats: 1000,
       },
     )
@@ -116,7 +116,7 @@ describe('handlePay', () => {
       available: true,
       payInvoice: vi.fn().mockResolvedValue({ paid: true, preimage: 'abc', method: 'nwc' }),
     }
-    const storeCredential = vi.fn()
+    const storeCredential = vi.fn().mockReturnValue(true)
 
     const result = await handlePay(
       { paymentHash: HASH_3 },
@@ -152,7 +152,7 @@ describe('handlePay', () => {
       available: true,
       payInvoice: vi.fn().mockResolvedValue({ paid: true, preimage: 'abc', method: 'nwc' }),
     }
-    const storeCredential = vi.fn()
+    const storeCredential = vi.fn().mockReturnValue(true)
 
     const result = await handlePay(
       { paymentHash: HASH_4 },
@@ -200,7 +200,7 @@ describe('handlePay', () => {
       }),
     }
 
-    const storeCredential = vi.fn()
+    const storeCredential = vi.fn().mockReturnValue(true)
 
     const result = await handlePay(
       { paymentHash: HASH_1, method: 'human' },

@@ -103,7 +103,7 @@ export async function handleBuyCredits(
 
     if (payResult.paid && payResult.preimage) {
       const decoded = deps.decodeBolt11(invoice)
-      deps.storeCredential(origin, macaroon, payResult.preimage, decoded.paymentHash ?? '')
+      const stored = deps.storeCredential(origin, macaroon, payResult.preimage, decoded.paymentHash ?? '')
 
       return {
         content: [{
@@ -112,6 +112,7 @@ export async function handleBuyCredits(
             paid: true,
             amountSats: args.amountSats,
             creditsReceived: typeof creditSats === 'number' ? creditSats : null,
+            credentialsStored: stored,
             method: payResult.method,
           }, null, 2),
         }],
