@@ -81,6 +81,37 @@ describe('parseAnnounceEvent', () => {
 
     expect(result.capabilities).toEqual([])
   })
+
+  it('includes endpoint in capabilities when present in content', () => {
+    const event = makeEvent({
+      content: JSON.stringify({
+        capabilities: [
+          { name: 'chat', description: 'Chat completion', endpoint: '/v1/chat' },
+          { name: 'embed', description: 'Embeddings', endpoint: '/v1/embed' },
+        ],
+      }),
+    })
+    const result = parseAnnounceEvent(event)
+
+    expect(result.capabilities).toEqual([
+      { name: 'chat', description: 'Chat completion', endpoint: '/v1/chat' },
+      { name: 'embed', description: 'Embeddings', endpoint: '/v1/embed' },
+    ])
+  })
+
+  it('omits endpoint from capabilities when not present', () => {
+    const event = makeEvent({
+      content: JSON.stringify({
+        capabilities: [{ name: 'chat', description: 'Chat completion' }],
+      }),
+    })
+    const result = parseAnnounceEvent(event)
+
+    expect(result.capabilities).toEqual([
+      { name: 'chat', description: 'Chat completion' },
+    ])
+    expect(result.capabilities[0]).not.toHaveProperty('endpoint')
+  })
 })
 
 describe('handleSearch', () => {
@@ -277,6 +308,24 @@ describe('handleSearch', () => {
 
     expect(parsed.error).toBeDefined()
     expect(result.isError).toBe(true)
+  })
+
+  it('includes capability endpoints in search results', async () => {
+    const event = makeEvent({
+      content: JSON.stringify({
+        capabilities: [
+          { name: 'chat', description: 'Chat completion', endpoint: '/v1/chat' },
+        ],
+      }),
+    })
+
+    const result = await handleSearch({ query: 'chat' }, mockDeps([event]))
+    const parsed = JSON.parse(result.content[0].text)
+
+    expect(parsed).toHaveLength(1)
+    expect(parsed[0].capabilities).toEqual([
+      { name: 'chat', description: 'Chat completion', endpoint: '/v1/chat' },
+    ])
   })
 
   it('matches query against name, about, and capabilities', async () => {

@@ -24,7 +24,7 @@ export interface ParsedService {
   paymentMethods: string[]
   pricing: { capability: string; amount: string; unit: string }[]
   topics: string[]
-  capabilities: { name: string; description: string }[]
+  capabilities: { name: string; description: string; endpoint?: string }[]
 }
 
 /** Extracts service metadata (name, URL, pricing, capabilities) from a kind 31402 Nostr event. */
@@ -44,19 +44,20 @@ export function parseAnnounceEvent(event: NostrEvent): ParsedService {
     unit: t[3] ?? '',
   }))
 
-  let capabilities: { name: string; description: string }[] = []
+  let capabilities: { name: string; description: string; endpoint?: string }[] = []
   try {
     const parsed = JSON.parse(event.content)
     if (Array.isArray(parsed?.capabilities)) {
       capabilities = parsed.capabilities
-        .filter((c: unknown): c is { name: string; description: string } =>
+        .filter((c: unknown): c is { name: string; description: string; endpoint?: string } =>
           typeof c === 'object' && c !== null &&
           typeof (c as Record<string, unknown>).name === 'string' &&
           typeof (c as Record<string, unknown>).description === 'string'
         )
-        .map((c: { name: string; description: string }) => ({
+        .map((c: { name: string; description: string; endpoint?: string }) => ({
           name: c.name.slice(0, 500),
           description: c.description.slice(0, 2000),
+          ...(typeof c.endpoint === 'string' ? { endpoint: c.endpoint.slice(0, 2048) } : {}),
         }))
     }
   } catch {
