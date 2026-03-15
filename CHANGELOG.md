@@ -1,3 +1,10 @@
+# [3.3.0](https://github.com/TheCryptoDonkey/402-mcp/compare/v3.2.0...v3.3.0) (2026-03-15)
+
+
+### Features
+
+* parse and surface capability endpoint field in search results ([26332a4](https://github.com/TheCryptoDonkey/402-mcp/commit/26332a4445f4c08f1d7f968939ca552b01e4dd30))
+
 # [3.2.0](https://github.com/TheCryptoDonkey/402-mcp/compare/v3.1.4...v3.2.0) (2026-03-15)
 
 
