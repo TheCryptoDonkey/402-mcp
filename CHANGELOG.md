@@ -1,3 +1,10 @@
+# [3.5.0](https://github.com/TheCryptoDonkey/402-mcp/compare/v3.4.5...v3.5.0) (2026-03-15)
+
+
+### Features
+
+* use toll-booth payment page URL for human wallet payments ([edb6044](https://github.com/TheCryptoDonkey/402-mcp/commit/edb6044e901642a309cad2025645bffa7b406b88))
+
 ## [3.4.5](https://github.com/TheCryptoDonkey/402-mcp/compare/v3.4.4...v3.4.5) (2026-03-15)
 
 
