@@ -27,12 +27,21 @@ export function createNostrSubscriber(ssrfAllowPrivate = false): SearchDeps['sub
         if (!url.startsWith('wss://') && !url.startsWith('ws://')) {
           return
         }
+        // Reject plain ws:// in production: Relay.connect() does its own DNS
+        // lookup, so we cannot pin the validated IP. TLS on wss:// prevents DNS
+        // rebinding (same reasoning as HTTPS). Only allow ws:// in local dev.
+        if (url.startsWith('ws://') && !ssrfAllowPrivate) {
+          console.error(`[402-mcp] Rejected unencrypted relay ${url} — ws:// is vulnerable to DNS rebinding. Use wss:// or set SSRF_ALLOW_PRIVATE=true for local dev.`)
+          return
+        }
         if (url.startsWith('ws://')) {
           console.error(`[402-mcp] Warning: connecting to unencrypted relay ${url} — subscription data may be visible to network observers. Use wss:// for production.`)
         }
 
         // SSRF check: validate relay hostname against blocked IPs before connecting.
-        // Convert ws(s):// to http(s):// for validation since validateUrl expects HTTP.
+        // For wss://, TLS certificate validation prevents DNS rebinding (attacker
+        // cannot present a valid cert from a private IP). This check catches
+        // relays pointing directly at private/reserved IPs.
         try {
           const httpUrl = url.replace(/^wss:\/\//, 'https://').replace(/^ws:\/\//, 'http://')
           await validateUrl(httpUrl, ssrfAllowPrivate)

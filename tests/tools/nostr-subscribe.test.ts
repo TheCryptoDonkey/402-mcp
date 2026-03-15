@@ -58,7 +58,18 @@ describe('createNostrSubscriber', () => {
     expect(events).toEqual([])
   })
 
-  it('skips SSRF check when ssrfAllowPrivate is true', async () => {
+  it('rejects ws:// relays in production mode (DNS rebinding risk)', async () => {
+    const subscriber = createNostrSubscriber(false)
+    const events = await subscriber(['ws://public-relay.example.com'], [31402], 3000)
+
+    // ws:// should be rejected entirely when ssrfAllowPrivate is false
+    expect(mockConnect).not.toHaveBeenCalled()
+    expect(events).toEqual([])
+  })
+
+  it('allows ws:// relays when ssrfAllowPrivate is true (local dev)', async () => {
+    mockLookup.mockResolvedValue([{ address: '127.0.0.1', family: 4 }])
+
     const mockSub = {
       close: vi.fn(),
     }
