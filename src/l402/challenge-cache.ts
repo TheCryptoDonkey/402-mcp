@@ -5,6 +5,8 @@ export interface CachedChallenge {
   costSats: number | null
   expiresAt: number
   url?: string
+  /** Full payment page URL for toll-booth servers (e.g. /invoice-status/{hash}?token={token}) */
+  paymentUrl?: string
 }
 
 const MAX_CACHE_SIZE = 1000

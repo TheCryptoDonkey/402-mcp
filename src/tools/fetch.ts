@@ -97,11 +97,15 @@ export async function handleFetch(
     const authHeader = response.headers.get('www-authenticate') ?? ''
     const challenge = deps.parseL402(authHeader)
 
-    let challengeBody: unknown = {}
-    try { challengeBody = await response.json() } catch {}
+    let challengeBody: Record<string, unknown> = {}
+    try { challengeBody = await response.json() as Record<string, unknown> } catch {}
 
     const decoded = challenge ? deps.decodeBolt11(challenge.invoice) : { costSats: null, paymentHash: null, expiry: 3600 }
     const serverInfo = deps.detectServer(response.headers, challengeBody)
+
+    // Extract payment page URL from toll-booth response body
+    const l402Body = challengeBody.l402 as Record<string, unknown> | undefined
+    const paymentPath = typeof l402Body?.payment_url === 'string' ? l402Body.payment_url : undefined
 
     // Step 3: Credits exhausted (had credentials but got 402)
     const creditsExhausted = !!cred
@@ -128,6 +132,8 @@ export async function handleFetch(
         // Roll back the spend tracking — human hasn't paid yet
         deps.spendTracker.unrecord(decoded.costSats!)
 
+        const fullPaymentUrl = paymentPath ? `${origin}${paymentPath}` : undefined
+
         deps.challengeCache.set({
           invoice: challenge.invoice,
           macaroon: challenge.macaroon,
@@ -135,8 +141,27 @@ export async function handleFetch(
           costSats: decoded.costSats,
           expiresAt: Date.now() + decoded.expiry * 1000,
           url: args.url,
+          paymentUrl: fullPaymentUrl,
         })
 
+        // If toll-booth payment page is available, direct the user there
+        // (better UX: proper QR, auto-polling, WebLN support, shows preimage when paid)
+        if (fullPaymentUrl) {
+          return {
+            content: [{
+              type: 'text' as const,
+              text: JSON.stringify({
+                status: 402,
+                costSats: decoded.costSats,
+                paymentHash: decoded.paymentHash,
+                paymentUrl: fullPaymentUrl,
+                message: `Pay ${decoded.costSats} sats: ${fullPaymentUrl}\n\nOpen the URL above to pay. After payment, call l402_pay with paymentHash "${decoded.paymentHash}" to complete.`,
+              }, null, 2),
+            }],
+          }
+        }
+
+        // Fallback: no payment page — show QR in terminal
         let qrText: string | undefined
         let qrPngBase64: string | undefined
         try {

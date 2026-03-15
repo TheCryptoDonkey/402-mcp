@@ -34,12 +34,15 @@ export async function handlePay(
   const paymentHash = args.paymentHash
   let cachedUrl: string | undefined
 
+  let cachedPaymentUrl: string | undefined
+
   if (paymentHash) {
     const cached = deps.cache.get(paymentHash)
     if (cached) {
       invoice = invoice ?? cached.invoice
       macaroon = macaroon ?? cached.macaroon
       cachedUrl = cached.url
+      cachedPaymentUrl = cached.paymentUrl
     }
   }
 
@@ -112,6 +115,69 @@ export async function handlePay(
 
   try {
     const origin = cachedUrl ? new URL(cachedUrl).origin : undefined
+
+    // If we have a payment page URL (toll-booth), poll it directly for settlement.
+    // This avoids the human wallet's long timeout — the user already paid via the page.
+    if (cachedPaymentUrl && wallet.method === 'human') {
+      const deadline = Date.now() + 30_000 // 30s timeout — user says they already paid
+      let intervalMs = 2000
+
+      while (Date.now() < deadline) {
+        try {
+          const res = await deps.fetchFn(cachedPaymentUrl, {
+            headers: { 'Accept': 'application/json' },
+          }, { retries: 0 })
+
+          if (res.ok) {
+            const data = await res.json() as Record<string, unknown>
+            if (data.paid === true) {
+              const preimage = typeof data.preimage === 'string' ? data.preimage : undefined
+              const tokenSuffix = typeof data.token_suffix === 'string' ? data.token_suffix : undefined
+              const suffix = preimage ?? tokenSuffix
+
+              let credentialsStored = false
+              if (suffix && origin) {
+                credentialsStored = deps.storeCredential(origin, macaroon, suffix, paymentHash ?? '', 'toll-booth')
+              }
+
+              if (paymentHash) deps.cache.delete(paymentHash)
+
+              return {
+                content: [{
+                  type: 'text' as const,
+                  text: JSON.stringify({
+                    paid: true,
+                    credentialsStored,
+                    method: 'human',
+                  }, null, 2),
+                }],
+              }
+            }
+          }
+        } catch {
+          // Poll failed — retry
+        }
+
+        const remaining = deadline - Date.now()
+        if (remaining <= 0) break
+        await new Promise(resolve => setTimeout(resolve, Math.min(intervalMs, remaining)))
+        intervalMs = Math.min(intervalMs * 1.5, 5000)
+      }
+
+      deps.spendTracker.unrecord(costSats)
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({
+            paid: false,
+            reason: 'Payment not yet confirmed after 30s. If you have paid, try again in a moment.',
+            paymentUrl: cachedPaymentUrl,
+          }),
+        }],
+        isError: true as const,
+      }
+    }
+
     const result = await wallet.payInvoice(invoice, { serverOrigin: origin })
 
     // Roll back spend-limit reservation if payment failed
@@ -121,10 +187,10 @@ export async function handlePay(
 
     let credentialsStored = false
     if (result.paid && result.preimage) {
-      const origin = cachedUrl ? new URL(cachedUrl).origin : ''
-      if (origin) {
+      const storeOrigin = cachedUrl ? new URL(cachedUrl).origin : ''
+      if (storeOrigin) {
         credentialsStored = deps.storeCredential(
-          origin,
+          storeOrigin,
           macaroon,
           result.preimage,
           paymentHash ?? '',
