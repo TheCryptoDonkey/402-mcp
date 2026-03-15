@@ -28,8 +28,18 @@ Key environment variables:
 | `CASHU_TOKENS` | — | Path to Cashu token store file |
 | `MAX_AUTO_PAY_SATS` | `1000` | Auto-pay threshold per request |
 | `MAX_SPEND_PER_MINUTE_SATS` | `10000` | Rolling 60s spend cap |
+| `CREDENTIAL_STORE` | `~/.402-mcp/credentials.json` | Path to credential store (must be within home dir) |
 | `TRANSPORT` | `stdio` | `stdio` or `http` |
+| `PORT` | `3402` | HTTP transport listen port |
+| `BIND_ADDRESS` | `127.0.0.1` | HTTP transport bind address |
+| `CORS_ORIGIN` | `false` | CORS origin for HTTP transport (`*` or specific origin) |
+| `HUMAN_PAY_TIMEOUT_S` | `600` | Timeout for human wallet QR payment (seconds) |
+| `HUMAN_PAY_POLL_S` | `3` | Poll interval for human wallet payment (seconds) |
+| `FETCH_TIMEOUT_MS` | `30000` | Outbound HTTP request timeout |
+| `FETCH_MAX_RETRIES` | `2` | Max retries for non-mutating requests |
+| `FETCH_MAX_RESPONSE_BYTES` | `10485760` | Max response body size (10 MiB) |
 | `SSRF_ALLOW_PRIVATE` | `false` | Allow requests to private IPs (local dev only) |
+| `ALLOW_INSECURE_TLS` | `false` | Acknowledge risk when `NODE_TLS_REJECT_UNAUTHORIZED=0` |
 
 ## Structure
 
