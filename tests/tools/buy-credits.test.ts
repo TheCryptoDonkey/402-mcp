@@ -359,19 +359,18 @@ describe('handleBuyCredits', () => {
       },
     )
 
-    expect(result.content).toHaveLength(3)
+    expect(result.content).toHaveLength(2)
     expect(result.content[0].type).toBe('text')
-    expect(result.content[1].type).toBe('text')
-    expect(result.content[2].type).toBe('image')
+    expect(result.content[1].type).toBe('image')
 
-    const parsed = JSON.parse(result.content[0].text)
+    // Text block starts with QR, followed by JSON
+    expect(result.content[0].text).toContain('█▀▀█')
+    const jsonPart = result.content[0].text.split('\n\n').slice(1).join('\n\n')
+    const parsed = JSON.parse(jsonPart)
     expect(parsed.paid).toBe(false)
     expect(parsed.invoice).toBe('lnbc5000n1test')
 
-    // QR text block
-    expect(result.content[1].text).toBe('█▀▀█')
-
-    const img = result.content[2] as { type: 'image'; data: string; mimeType: string }
+    const img = result.content[1] as { type: 'image'; data: string; mimeType: string }
     expect(img.data).toBe('QRDATA')
   })
 })

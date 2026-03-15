@@ -159,24 +159,19 @@ export async function handleBuyCredits(
         // QR generation failed — text response still has invoice
       }
 
+      const json = JSON.stringify({
+        paid: false,
+        invoice,
+        paymentHash: decoded.paymentHash,
+        costSats: args.amountSats,
+        message: `Scan QR to pay ${args.amountSats} sats. After payment, call l402_pay with the paymentHash.`,
+      }, null, 2)
+
+      // Combine QR + JSON in one text block so terminals render the QR with newlines
       const content: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> = [{
         type: 'text' as const,
-        text: JSON.stringify({
-          paid: false,
-          invoice,
-          paymentHash: decoded.paymentHash,
-          costSats: args.amountSats,
-          message: `Scan QR to pay ${args.amountSats} sats. After payment, call l402_pay with the paymentHash.`,
-        }, null, 2),
+        text: qrText ? `${qrText}\n\n${json}` : json,
       }]
-
-      // QR as separate text block so newlines render correctly in terminals
-      if (qrText) {
-        content.push({
-          type: 'text' as const,
-          text: qrText,
-        })
-      }
 
       if (qrPngBase64) {
         content.push({
