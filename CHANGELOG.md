@@ -1,3 +1,10 @@
+## [3.3.1](https://github.com/TheCryptoDonkey/402-mcp/compare/v3.3.0...v3.3.1) (2026-03-15)
+
+
+### Bug Fixes
+
+* gitignore .mcp.json and document all config env vars in CLAUDE.md ([b3bb888](https://github.com/TheCryptoDonkey/402-mcp/commit/b3bb88887dd34043e8ff7c964cb6c3f3be332ac6))
+
 # [3.3.0](https://github.com/TheCryptoDonkey/402-mcp/compare/v3.2.0...v3.3.0) (2026-03-15)
 
 
