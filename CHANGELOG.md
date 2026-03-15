@@ -1,3 +1,10 @@
+# [3.2.0](https://github.com/TheCryptoDonkey/402-mcp/compare/v3.1.4...v3.2.0) (2026-03-15)
+
+
+### Features
+
+* human wallet QR + poll support in l402_fetch and buy-credits ([bb8f29c](https://github.com/TheCryptoDonkey/402-mcp/commit/bb8f29ca0b7467a883f0fe53810fffa77f6de839))
+
 ## [3.1.4](https://github.com/TheCryptoDonkey/402-mcp/compare/v3.1.3...v3.1.4) (2026-03-15)
 
 
