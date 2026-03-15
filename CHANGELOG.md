@@ -1,3 +1,10 @@
+# [3.9.0](https://github.com/TheCryptoDonkey/402-mcp/compare/v3.8.1...v3.9.0) (2026-03-15)
+
+
+### Features
+
+* surface pricing tiers in 402 responses ([3d176d4](https://github.com/TheCryptoDonkey/402-mcp/commit/3d176d483c615c2319d3fb269224ff69c43ca09c))
+
 ## [3.8.1](https://github.com/TheCryptoDonkey/402-mcp/compare/v3.8.0...v3.8.1) (2026-03-15)
 
 
