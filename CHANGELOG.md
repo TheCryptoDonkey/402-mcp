@@ -1,3 +1,10 @@
+## [3.3.3](https://github.com/TheCryptoDonkey/402-mcp/compare/v3.3.2...v3.3.3) (2026-03-15)
+
+
+### Bug Fixes
+
+* return QR code immediately for human wallet instead of blocking ([1092355](https://github.com/TheCryptoDonkey/402-mcp/commit/1092355bea363ac2dfc35abe7d8b7a8560e1acf8))
+
 ## [3.3.2](https://github.com/TheCryptoDonkey/402-mcp/compare/v3.3.1...v3.3.2) (2026-03-15)
 
 
