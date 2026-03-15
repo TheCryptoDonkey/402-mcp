@@ -213,7 +213,7 @@ describe('handleBuyCredits', () => {
         fetchFn: mockFetch as unknown as typeof fetch,
         payInvoice,
         storeCredential: vi.fn(),
-        decodeBolt11: vi.fn(),
+        decodeBolt11: vi.fn().mockReturnValue({ costSats: 5000, paymentHash: 'abc123', expiry: 3600 }),
         maxSpendPerMinuteSats: 10000,
         spendTracker: new SpendTracker(),
       },
@@ -223,5 +223,65 @@ describe('handleBuyCredits', () => {
     expect(parsed.paid).toBe(false)
     expect(parsed.reason).toContain('Payment failed')
     expect(result.isError).toBe(true)
+  })
+
+  it('rejects invoice with amount different from requested amountSats', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      status: 200,
+      ok: true,
+      json: async () => ({
+        bolt11: 'lnbc99999n1test',
+        macaroon: 'mac456',
+        credit_sats: 100000,
+      }),
+    })
+
+    const result = await handleBuyCredits(
+      { url: 'https://api.example.com/data', amountSats: 1000 },
+      {
+        fetchFn: mockFetch as unknown as typeof fetch,
+        payInvoice: vi.fn(),
+        storeCredential: vi.fn(),
+        decodeBolt11: vi.fn().mockReturnValue({ costSats: 99999, paymentHash: 'hash1', expiry: 3600 }),
+        maxSpendPerMinuteSats: 100000,
+        spendTracker: new SpendTracker(),
+      },
+    )
+
+    const parsed = JSON.parse(result.content[0].text)
+    expect(result.isError).toBe(true)
+    expect(parsed.error).toContain('does not match requested amount')
+    // Payment should never have been attempted
+    expect(mockFetch).toHaveBeenCalledTimes(1) // only the create-invoice call
+  })
+
+  it('allows invoice when decoded amount matches requested amountSats', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      status: 200,
+      ok: true,
+      json: async () => ({
+        bolt11: 'lnbc5000n1test',
+        macaroon: 'mac456',
+        credit_sats: 5500,
+      }),
+    })
+
+    const payInvoice = vi.fn().mockResolvedValue({ paid: true, preimage: 'a'.repeat(64), method: 'nwc' })
+
+    const result = await handleBuyCredits(
+      { url: 'https://api.example.com/data', amountSats: 5000 },
+      {
+        fetchFn: mockFetch as unknown as typeof fetch,
+        payInvoice,
+        storeCredential: vi.fn().mockReturnValue(true),
+        decodeBolt11: vi.fn().mockReturnValue({ costSats: 5000, paymentHash: 'hash1', expiry: 3600 }),
+        maxSpendPerMinuteSats: 10000,
+        spendTracker: new SpendTracker(),
+      },
+    )
+
+    const parsed = JSON.parse(result.content[0].text)
+    expect(parsed.paid).toBe(true)
+    expect(payInvoice).toHaveBeenCalled()
   })
 })

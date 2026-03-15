@@ -83,8 +83,22 @@ export async function handleBuyCredits(
     }
     const { bolt11: invoice, macaroon, credit_sats: creditSats } = validated.data
 
+    // Verify the invoice amount matches what we requested — a malicious server
+    // could return an invoice for a much larger amount than amountSats.
+    const decoded = deps.decodeBolt11(invoice)
+    if (decoded.costSats !== null && decoded.costSats !== args.amountSats) {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({ error: `Invoice amount (${decoded.costSats} sats) does not match requested amount (${args.amountSats} sats). Refusing to pay.` }),
+        }],
+        isError: true as const,
+      }
+    }
+
     // Atomic check-and-record: prevents TOCTOU race between limit check and payment
-    if (!deps.spendTracker.tryRecord(args.amountSats, deps.maxSpendPerMinuteSats)) {
+    const spendAmount = decoded.costSats ?? args.amountSats
+    if (!deps.spendTracker.tryRecord(spendAmount, deps.maxSpendPerMinuteSats)) {
       return {
         content: [{
           type: 'text' as const,
@@ -98,11 +112,10 @@ export async function handleBuyCredits(
 
     // Roll back spend-limit reservation if payment failed
     if (!payResult.paid || !payResult.preimage) {
-      deps.spendTracker.unrecord(args.amountSats)
+      deps.spendTracker.unrecord(spendAmount)
     }
 
     if (payResult.paid && payResult.preimage) {
-      const decoded = deps.decodeBolt11(invoice)
       const stored = deps.storeCredential(origin, macaroon, payResult.preimage, decoded.paymentHash ?? '')
 
       return {
