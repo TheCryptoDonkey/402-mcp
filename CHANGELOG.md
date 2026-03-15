@@ -1,3 +1,10 @@
+## [3.8.1](https://github.com/TheCryptoDonkey/402-mcp/compare/v3.8.0...v3.8.1) (2026-03-15)
+
+
+### Bug Fixes
+
+* increase l402_pay poll timeout from 30s to 120s ([47bc450](https://github.com/TheCryptoDonkey/402-mcp/commit/47bc450a203f607cea508f07a38d66aebe5fd082))
+
 # [3.8.0](https://github.com/TheCryptoDonkey/402-mcp/compare/v3.7.0...v3.8.0) (2026-03-15)
 
 
