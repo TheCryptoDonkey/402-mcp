@@ -1,3 +1,10 @@
+## [3.5.1](https://github.com/TheCryptoDonkey/402-mcp/compare/v3.5.0...v3.5.1) (2026-03-15)
+
+
+### Bug Fixes
+
+* update payment messages to guide AI orchestration ([eee7bb8](https://github.com/TheCryptoDonkey/402-mcp/commit/eee7bb861f67bc314da41fd0db72118c7c965d24))
+
 # [3.5.0](https://github.com/TheCryptoDonkey/402-mcp/compare/v3.4.5...v3.5.0) (2026-03-15)
 
 
