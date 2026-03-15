@@ -264,7 +264,7 @@ export async function handleFetch(
 
     // Step 5: Return 402 challenge for agent decision
     const message = creditsExhausted
-      ? `Stored credentials for ${origin} have no remaining credits. New payment required.`
+      ? `Insufficient credits for ${origin}${decoded.costSats !== null ? ` (this endpoint costs ${decoded.costSats} sats)` : ''}. Use l402_buy_credits to purchase more credits${tiers ? ' — tier options are included below' : ''}.`
       : !autoPay
         ? `Payment of ${decoded.costSats} sats required. autoPay disabled.`
         : decoded.costSats !== null && decoded.costSats > deps.maxAutoPaySats

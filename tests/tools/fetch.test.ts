@@ -156,7 +156,7 @@ describe('handleFetch', () => {
 
     expect(parsed.status).toBe(402)
     expect(parsed.creditsExhausted).toBe(true)
-    expect(parsed.message).toContain('no remaining credits')
+    expect(parsed.message).toContain('Insufficient credits')
     // Should NOT auto-pay when creditsExhausted (non-human wallet)
     expect(deps.payInvoice).not.toHaveBeenCalled()
     // Should delete stale credential
