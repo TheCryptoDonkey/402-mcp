@@ -113,9 +113,12 @@ export async function handleFetch(
 
     // Step 4: Auto-pay if within budget
     const autoPay = args.autoPay ?? false
+    const isHumanWallet = deps.walletMethod() === 'human'
     // Only attempt spend tracking when auto-pay would actually proceed,
     // otherwise tryRecord inflates the spend tracker and blocks legitimate payments.
-    const shouldAttemptPay = !creditsExhausted && autoPay && challenge && decoded.costSats !== null && decoded.costSats <= deps.maxAutoPaySats
+    // For human wallets, allow re-purchase even when credits are exhausted —
+    // the human decides whether to pay by scanning the QR code.
+    const shouldAttemptPay = (!creditsExhausted || isHumanWallet) && autoPay && challenge && decoded.costSats !== null && decoded.costSats <= deps.maxAutoPaySats
     // Use tryRecord as the authoritative gate — atomically checks AND records
     // the spend before payment, closing the TOCTOU gap between check and pay.
     const withinSpendLimit = shouldAttemptPay && deps.spendTracker.tryRecord(decoded.costSats!, deps.maxSpendPerMinuteSats)

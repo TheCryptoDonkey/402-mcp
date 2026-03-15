@@ -157,10 +157,47 @@ describe('handleFetch', () => {
     expect(parsed.status).toBe(402)
     expect(parsed.creditsExhausted).toBe(true)
     expect(parsed.message).toContain('no remaining credits')
-    // Should NOT auto-pay when creditsExhausted
+    // Should NOT auto-pay when creditsExhausted (non-human wallet)
     expect(deps.payInvoice).not.toHaveBeenCalled()
     // Should delete stale credential
     expect((deps.credentialStore as any).delete).toHaveBeenCalledWith('https://api.example.com')
+  })
+
+  it('returns QR when credits exhausted and wallet is human', async () => {
+    const deps = makeDeps({
+      fetchFn: vi.fn().mockResolvedValue(mockResponse(402, {
+        'www-authenticate': 'L402 macaroon="mac2", invoice="lnbc10n1new"',
+      }, '{}')) as unknown as typeof fetch,
+      credentialStore: {
+        get: vi.fn().mockReturnValue({ macaroon: 'old-mac', preimage: 'old-pre' }),
+        set: vi.fn(),
+        delete: vi.fn(),
+        updateBalance: vi.fn(),
+        updateLastUsed: vi.fn(),
+      } as unknown as FetchDeps['credentialStore'],
+      parseL402: vi.fn().mockReturnValue({ macaroon: 'mac2', invoice: 'lnbc10n1new' }),
+      decodeBolt11: vi.fn().mockReturnValue({ costSats: 10, paymentHash: 'b'.repeat(64), expiry: 3600 }),
+      walletMethod: () => 'human',
+      generateQr: vi.fn().mockResolvedValue('data:image/png;base64,QRDATA'),
+    })
+
+    const result = await handleFetch({ url: 'https://api.example.com/data', autoPay: true }, deps)
+
+    // Should return QR image for human to pay
+    expect(result.content).toHaveLength(2)
+    expect(result.content[0].type).toBe('text')
+    expect(result.content[1].type).toBe('image')
+
+    const parsed = JSON.parse(result.content[0].text)
+    expect(parsed.status).toBe(402)
+    expect(parsed.costSats).toBe(10)
+    expect(parsed.message).toContain('Scan QR')
+
+    // Should delete stale credential
+    expect((deps.credentialStore as any).delete).toHaveBeenCalledWith('https://api.example.com')
+
+    // payInvoice should NOT have been called — QR returned immediately
+    expect(deps.payInvoice).not.toHaveBeenCalled()
   })
 
   it('respects autoPay: false', async () => {
