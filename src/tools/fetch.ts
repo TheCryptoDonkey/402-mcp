@@ -103,9 +103,10 @@ export async function handleFetch(
     const decoded = challenge ? deps.decodeBolt11(challenge.invoice) : { costSats: null, paymentHash: null, expiry: 3600 }
     const serverInfo = deps.detectServer(response.headers, challengeBody)
 
-    // Extract payment page URL from toll-booth response body
+    // Extract payment page URL and pricing tiers from toll-booth response body
     const l402Body = challengeBody.l402 as Record<string, unknown> | undefined
     const paymentPath = typeof l402Body?.payment_url === 'string' ? l402Body.payment_url : undefined
+    const tiers = challengeBody.tiers ?? challengeBody.credit_tiers ?? undefined
 
     // Step 3: Credits exhausted (had credentials but got 402)
     const creditsExhausted = !!cred
@@ -155,6 +156,7 @@ export async function handleFetch(
                 costSats: decoded.costSats,
                 paymentHash: decoded.paymentHash,
                 paymentUrl: fullPaymentUrl,
+                ...(tiers ? { tiers } : {}),
                 message: `Payment required: ${decoded.costSats} sats. Open the URL to pay, then call l402_pay with paymentHash "${decoded.paymentHash}" to confirm and retry.`,
               }, null, 2),
             }],
@@ -279,6 +281,7 @@ export async function handleFetch(
           invoice: challenge?.invoice,
           paymentHash: decoded.paymentHash,
           creditsExhausted,
+          ...(tiers ? { tiers } : {}),
           message,
         }, null, 2),
       }],
@@ -299,7 +302,7 @@ export function registerFetchTool(server: McpServer, deps: FetchDeps): void {
   server.registerTool(
     'l402_fetch',
     {
-      description: 'Fetch a URL with automatic payment handling. Use this to access any paid API or service. Manages credentials, pays automatically when autoPay is true and cost is within budget, and retries. For human wallets, returns a payment page URL or QR code. Set autoPay to true for seamless access.',
+      description: 'Fetch a URL with automatic payment handling. Use this to access any paid API or service. Manages credentials, pays automatically when autoPay is true and cost is within budget, and retries. For human wallets, returns a payment page URL or QR code. Set autoPay to true for seamless access. When a 402 is returned with tiers, present the pricing options to the user and use l402_buy_credits to purchase their chosen tier.',
       inputSchema: {
         url: z.url().describe('The URL to request'),
         method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']).optional().default('GET').describe('HTTP method'),
