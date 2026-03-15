@@ -1,3 +1,10 @@
+## [3.4.3](https://github.com/TheCryptoDonkey/402-mcp/compare/v3.4.2...v3.4.3) (2026-03-15)
+
+
+### Bug Fixes
+
+* combine QR and JSON in single text block for Claude Code display ([3b5aae5](https://github.com/TheCryptoDonkey/402-mcp/commit/3b5aae534c785b0347362de62a7754204acf5760))
+
 ## [3.4.2](https://github.com/TheCryptoDonkey/402-mcp/compare/v3.4.1...v3.4.2) (2026-03-15)
 
 
