@@ -1,3 +1,10 @@
+# [3.4.0](https://github.com/TheCryptoDonkey/402-mcp/compare/v3.3.4...v3.4.0) (2026-03-15)
+
+
+### Features
+
+* include text QR code in payment responses for terminal clients ([051eb78](https://github.com/TheCryptoDonkey/402-mcp/commit/051eb788ad7f0e0f06d5b46b1a0046b88ed3b932))
+
 ## [3.3.4](https://github.com/TheCryptoDonkey/402-mcp/compare/v3.3.3...v3.3.4) (2026-03-15)
 
 
