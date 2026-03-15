@@ -56,6 +56,7 @@ Ready to make paid calls? See the [full quickstart guide](./docs/quickstart.md) 
 | `l402_credentials` | List stored credentials and cached balances |
 | `l402_balance` | Check cached credit balance for a server |
 | `l402_search` | Discover L402 services on Nostr relays (kind 31402 announcements) |
+| `l402_store_token` | Store an L402 token obtained from a payment page |
 
 ### toll-booth extensions
 
