@@ -255,6 +255,33 @@ describe('handleBuyCredits', () => {
     expect(mockFetch).toHaveBeenCalledTimes(1) // only the create-invoice call
   })
 
+  it('rejects amountless invoices to prevent overbilling bypass', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      status: 200,
+      ok: true,
+      json: async () => ({
+        bolt11: 'lnbc1test',
+        macaroon: 'mac456',
+      }),
+    })
+
+    const result = await handleBuyCredits(
+      { url: 'https://api.example.com/data', amountSats: 1000 },
+      {
+        fetchFn: mockFetch as unknown as typeof fetch,
+        payInvoice: vi.fn(),
+        storeCredential: vi.fn(),
+        decodeBolt11: vi.fn().mockReturnValue({ costSats: null, paymentHash: null, expiry: 3600 }),
+        maxSpendPerMinuteSats: 10000,
+        spendTracker: new SpendTracker(),
+      },
+    )
+
+    const parsed = JSON.parse(result.content[0].text)
+    expect(result.isError).toBe(true)
+    expect(parsed.error).toContain('amountless invoice')
+  })
+
   it('allows invoice when decoded amount matches requested amountSats', async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       status: 200,

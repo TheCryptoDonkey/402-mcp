@@ -84,9 +84,19 @@ export async function handleBuyCredits(
     const { bolt11: invoice, macaroon, credit_sats: creditSats } = validated.data
 
     // Verify the invoice amount matches what we requested — a malicious server
-    // could return an invoice for a much larger amount than amountSats.
+    // could return an invoice for a much larger amount than amountSats, or omit
+    // the amount entirely to bypass verification.
     const decoded = deps.decodeBolt11(invoice)
-    if (decoded.costSats !== null && decoded.costSats !== args.amountSats) {
+    if (decoded.costSats === null) {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({ error: 'Server returned an amountless invoice. Refusing to pay — cannot verify amount matches requested amount.' }),
+        }],
+        isError: true as const,
+      }
+    }
+    if (decoded.costSats !== args.amountSats) {
       return {
         content: [{
           type: 'text' as const,
@@ -97,7 +107,7 @@ export async function handleBuyCredits(
     }
 
     // Atomic check-and-record: prevents TOCTOU race between limit check and payment
-    const spendAmount = decoded.costSats ?? args.amountSats
+    const spendAmount = decoded.costSats
     if (!deps.spendTracker.tryRecord(spendAmount, deps.maxSpendPerMinuteSats)) {
       return {
         content: [{
