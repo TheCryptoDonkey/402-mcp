@@ -343,6 +343,50 @@ describe('createResilientFetch', () => {
       expect(res.status).toBe(200)
     })
 
+    it('strips Authorization header on cross-origin redirect', async () => {
+      const redirectResponse = new Response(null, {
+        status: 302,
+        headers: { Location: 'http://other.example.com/api' },
+      })
+      const finalResponse = new Response('ok', { status: 200 })
+
+      mockFetch
+        .mockResolvedValueOnce(redirectResponse)
+        .mockResolvedValueOnce(finalResponse)
+
+      const resilientFetch = createResilientFetch(mockFetch, { retries: 0 })
+      await resilientFetch('http://example.com/old', {
+        headers: { Authorization: 'L402 mac:preimage' },
+      })
+
+      // Second fetch call (to the redirect target) should NOT have Authorization
+      const secondCall = mockFetch.mock.calls[1]
+      const headers = new Headers(secondCall[1].headers)
+      expect(headers.get('Authorization')).toBeNull()
+    })
+
+    it('preserves Authorization header on same-origin redirect', async () => {
+      const redirectResponse = new Response(null, {
+        status: 302,
+        headers: { Location: 'http://example.com/new-path' },
+      })
+      const finalResponse = new Response('ok', { status: 200 })
+
+      mockFetch
+        .mockResolvedValueOnce(redirectResponse)
+        .mockResolvedValueOnce(finalResponse)
+
+      const resilientFetch = createResilientFetch(mockFetch, { retries: 0 })
+      await resilientFetch('http://example.com/old', {
+        headers: { Authorization: 'L402 mac:preimage' },
+      })
+
+      // Second fetch call (same-origin redirect) should keep Authorization
+      const secondCall = mockFetch.mock.calls[1]
+      const headers = new Headers(secondCall[1].headers)
+      expect(headers.get('Authorization')).toBe('L402 mac:preimage')
+    })
+
     it('throws after 5 redirects', async () => {
       const makeRedirect = (n: number) =>
         new Response(null, { status: 302, headers: { Location: `http://example.com/${n}` } })
