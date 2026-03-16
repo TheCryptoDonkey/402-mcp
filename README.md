@@ -33,6 +33,40 @@ Ask Claude: *"Search for paid joke APIs using l402_search"* — no wallet needed
 
 Ready to make paid calls? See the [full quickstart guide](./docs/quickstart.md) to set up a wallet and watch your agent pay for its first API call.
 
+## How it works
+
+```mermaid
+graph LR
+    A["1. l402_config()"] --> B["2. l402_discover(url)"]
+    B --> C["3. Agent reasons<br/>about pricing"]
+    C --> D["4. l402_buy_credits()<br/>or l402_fetch()"]
+    D --> E["5. l402_fetch(url)<br/>with credentials"]
+    E --> F["6. Data returned<br/>+ balance cached"]
+```
+
+**Example session:**
+
+```
+Agent: "I need routing data from routing.trotters.cc"
+
+1. l402_config()
+   -> nwcConfigured: true, maxAutoPaySats: 1000
+
+2. l402_discover("https://routing.trotters.cc/api/route")
+   -> 10 sats/request, toll-booth detected, tiers available
+
+3. Agent reasons: "I need ~20 requests. The 500-sat tier
+   gives 555 credits. Better value."
+
+4. l402_buy_credits(url, amountSats=500)
+   -> Paid 500 sats, received 555 credits
+
+5. l402_fetch("https://routing.trotters.cc/api/route?from=...&to=...")
+   -> 200 OK, route data, 545 credits remaining
+```
+
+For detailed architecture and payment flow diagrams, see [docs/architecture.md](./docs/architecture.md).
+
 ## Configuration
 
 | Variable | Default | Description |
@@ -79,40 +113,6 @@ Services can announce multiple endpoints for the **same service** (same pricing,
 |------|-------------|
 | `l402_buy_credits` | Browse and purchase volume discount tiers |
 | `l402_redeem_cashu` | Redeem Cashu tokens directly (avoids Lightning round-trip) |
-
-## How it works
-
-```mermaid
-graph LR
-    A["1. l402_config()"] --> B["2. l402_discover(url)"]
-    B --> C["3. Agent reasons<br/>about pricing"]
-    C --> D["4. l402_buy_credits()<br/>or l402_fetch()"]
-    D --> E["5. l402_fetch(url)<br/>with credentials"]
-    E --> F["6. Data returned<br/>+ balance cached"]
-```
-
-**Example session:**
-
-```
-Agent: "I need routing data from routing.trotters.cc"
-
-1. l402_config()
-   -> nwcConfigured: true, maxAutoPaySats: 1000
-
-2. l402_discover("https://routing.trotters.cc/api/route")
-   -> 10 sats/request, toll-booth detected, tiers available
-
-3. Agent reasons: "I need ~20 requests. The 500-sat tier
-   gives 555 credits. Better value."
-
-4. l402_buy_credits(url, amountSats=500)
-   -> Paid 500 sats, received 555 credits
-
-5. l402_fetch("https://routing.trotters.cc/api/route?from=...&to=...")
-   -> 200 OK, route data, 545 credits remaining
-```
-
-For detailed architecture and payment flow diagrams, see [docs/architecture.md](./docs/architecture.md).
 
 ## Payment methods
 
