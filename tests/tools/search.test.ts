@@ -112,6 +112,57 @@ describe('parseAnnounceEvent', () => {
     ])
     expect(result.capabilities[0]).not.toHaveProperty('endpoint')
   })
+
+  it('parses pricing, auth, and timeout from capabilities', () => {
+    const event = makeEvent({
+      content: JSON.stringify({
+        capabilities: [
+          { name: 'dynamic-api', description: 'Dynamically priced', pricing: 'dynamic' },
+          { name: 'free-api', description: 'No auth needed', auth: 'none', endpoint: '/v1/free' },
+          { name: 'timed-api', description: 'Expires', timeout: 3600, auth: 'freebie 5' },
+        ],
+      }),
+    })
+    const result = parseAnnounceEvent(event)
+
+    expect(result.capabilities[0]).toEqual({
+      name: 'dynamic-api', description: 'Dynamically priced', pricing: 'dynamic',
+    })
+    expect(result.capabilities[1]).toEqual({
+      name: 'free-api', description: 'No auth needed', auth: 'none', endpoint: '/v1/free',
+    })
+    expect(result.capabilities[2]).toEqual({
+      name: 'timed-api', description: 'Expires', timeout: 3600, auth: 'freebie 5',
+    })
+  })
+
+  it('omits pricing, auth, and timeout when not present', () => {
+    const event = makeEvent({
+      content: JSON.stringify({
+        capabilities: [{ name: 'basic', description: 'Basic API' }],
+      }),
+    })
+    const result = parseAnnounceEvent(event)
+
+    expect(result.capabilities[0]).not.toHaveProperty('pricing')
+    expect(result.capabilities[0]).not.toHaveProperty('auth')
+    expect(result.capabilities[0]).not.toHaveProperty('timeout')
+  })
+
+  it('ignores timeout when zero or negative', () => {
+    const event = makeEvent({
+      content: JSON.stringify({
+        capabilities: [
+          { name: 'zero', description: 'Zero timeout', timeout: 0 },
+          { name: 'neg', description: 'Negative timeout', timeout: -1 },
+        ],
+      }),
+    })
+    const result = parseAnnounceEvent(event)
+
+    expect(result.capabilities[0]).not.toHaveProperty('timeout')
+    expect(result.capabilities[1]).not.toHaveProperty('timeout')
+  })
 })
 
 describe('handleSearch', () => {
