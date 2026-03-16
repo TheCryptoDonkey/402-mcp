@@ -378,4 +378,102 @@ describe('handleFetch', () => {
     // payInvoice should NOT have been called
     expect(deps.payInvoice).not.toHaveBeenCalled()
   })
+
+  describe('pubkey-based credential keying', () => {
+    it('uses pubkey as credential key when provided', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(mockResponse(200))
+      const credGet = vi.fn().mockReturnValue(undefined)
+      const deps = makeDeps({
+        fetchFn: fetchMock as unknown as typeof fetch,
+        credentialStore: {
+          get: credGet,
+          set: vi.fn(),
+          updateBalance: vi.fn(),
+          updateLastUsed: vi.fn(),
+        } as unknown as FetchDeps['credentialStore'],
+      })
+
+      await handleFetch({ url: 'https://api.example.com/data', pubkey: 'abc123pubkey' }, deps)
+
+      expect(credGet).toHaveBeenCalledWith('abc123pubkey')
+    })
+
+    it('falls back to origin key when pubkey is absent', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(mockResponse(200))
+      const credGet = vi.fn().mockReturnValue(undefined)
+      const deps = makeDeps({
+        fetchFn: fetchMock as unknown as typeof fetch,
+        credentialStore: {
+          get: credGet,
+          set: vi.fn(),
+          updateBalance: vi.fn(),
+          updateLastUsed: vi.fn(),
+        } as unknown as FetchDeps['credentialStore'],
+      })
+
+      await handleFetch({ url: 'https://api.example.com/data' }, deps)
+
+      expect(credGet).toHaveBeenCalledWith('https://api.example.com')
+    })
+
+    it('stores credential under pubkey after successful payment', async () => {
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce(mockResponse(402, {
+          'www-authenticate': 'L402 macaroon="mac1", invoice="lnbc50n1test"',
+        }, '{}'))
+        .mockResolvedValueOnce(mockResponse(200, {}, 'paid content'))
+
+      const credSet = vi.fn()
+      const deps = makeDeps({
+        fetchFn: fetchMock as unknown as typeof fetch,
+        credentialStore: {
+          get: vi.fn().mockReturnValue(undefined),
+          set: credSet,
+          updateBalance: vi.fn(),
+          updateLastUsed: vi.fn(),
+        } as unknown as FetchDeps['credentialStore'],
+        parseL402: vi.fn().mockReturnValue({ macaroon: 'mac1', invoice: 'lnbc50n1test' }),
+        decodeBolt11: vi.fn().mockReturnValue({ costSats: 50, paymentHash: 'hash1', expiry: 3600 }),
+        payInvoice: vi.fn().mockResolvedValue({ paid: true, preimage: 'a'.repeat(64), method: 'nwc' }),
+        maxAutoPaySats: 100,
+      })
+
+      await handleFetch({ url: 'https://api.example.com/data', autoPay: true, pubkey: 'abc123pubkey' }, deps)
+
+      expect(credSet).toHaveBeenCalledWith('abc123pubkey', expect.objectContaining({
+        macaroon: 'mac1',
+        preimage: 'a'.repeat(64),
+      }))
+    })
+
+    it('stores credential under origin when pubkey is absent', async () => {
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce(mockResponse(402, {
+          'www-authenticate': 'L402 macaroon="mac1", invoice="lnbc50n1test"',
+        }, '{}'))
+        .mockResolvedValueOnce(mockResponse(200, {}, 'paid content'))
+
+      const credSet = vi.fn()
+      const deps = makeDeps({
+        fetchFn: fetchMock as unknown as typeof fetch,
+        credentialStore: {
+          get: vi.fn().mockReturnValue(undefined),
+          set: credSet,
+          updateBalance: vi.fn(),
+          updateLastUsed: vi.fn(),
+        } as unknown as FetchDeps['credentialStore'],
+        parseL402: vi.fn().mockReturnValue({ macaroon: 'mac1', invoice: 'lnbc50n1test' }),
+        decodeBolt11: vi.fn().mockReturnValue({ costSats: 50, paymentHash: 'hash1', expiry: 3600 }),
+        payInvoice: vi.fn().mockResolvedValue({ paid: true, preimage: 'a'.repeat(64), method: 'nwc' }),
+        maxAutoPaySats: 100,
+      })
+
+      await handleFetch({ url: 'https://api.example.com/data', autoPay: true }, deps)
+
+      expect(credSet).toHaveBeenCalledWith('https://api.example.com', expect.objectContaining({
+        macaroon: 'mac1',
+        preimage: 'a'.repeat(64),
+      }))
+    })
+  })
 })

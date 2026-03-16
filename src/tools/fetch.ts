@@ -43,11 +43,15 @@ function parseBalance(value: string | null): number | null {
 
 /** Makes an HTTP request with automatic L402 payment and credential reuse. Pays the invoice if within budget, stores the credential, and retries. */
 export async function handleFetch(
-  args: { url: string; method?: string; headers?: Record<string, string>; body?: string; autoPay?: boolean },
+  args: { url: string; method?: string; headers?: Record<string, string>; body?: string; autoPay?: boolean; pubkey?: string },
   deps: FetchDeps,
 ) {
   const origin = new URL(args.url).origin
-  const cred = deps.credentialStore.get(origin)
+  // When a pubkey is provided (from search results) use it as the credential key so
+  // credentials are shared across all transport URLs for the same service.
+  // For direct URL calls without a pubkey, fall back to origin-based keying.
+  const credKey = args.pubkey ?? origin
+  const cred = deps.credentialStore.get(credKey)
   const reqHeaders: Record<string, string> = {}
   // Copy user headers, stripping dangerous hop-by-hop/security-sensitive ones
   if (args.headers) {
@@ -61,7 +65,7 @@ export async function handleFetch(
   // Step 1-2: Use stored credentials if available
   if (cred) {
     reqHeaders['Authorization'] = `L402 ${cred.macaroon}:${cred.preimage}`
-    deps.credentialStore.updateLastUsed(origin)
+    deps.credentialStore.updateLastUsed(credKey)
   }
 
   try {
@@ -75,7 +79,7 @@ export async function handleFetch(
     if (response.status !== 402) {
       const balance = parseBalance(response.headers.get('x-credit-balance'))
       if (balance !== null) {
-        deps.credentialStore.updateBalance(origin, balance)
+        deps.credentialStore.updateBalance(credKey, balance)
       }
 
       const body = await response.text()
@@ -113,7 +117,7 @@ export async function handleFetch(
 
     // Delete stale credential so next request doesn't send it again
     if (creditsExhausted) {
-      deps.credentialStore.delete(origin)
+      deps.credentialStore.delete(credKey)
     }
 
     // Step 4: Auto-pay if within budget
@@ -221,7 +225,7 @@ export async function handleFetch(
         }
 
         // Store credential and retry
-        deps.credentialStore.set(origin, {
+        deps.credentialStore.set(credKey, {
           macaroon: challenge.macaroon,
           preimage: payResult.preimage,
           paymentHash: decoded.paymentHash ?? '',
@@ -243,7 +247,7 @@ export async function handleFetch(
 
         const retryBalance = parseBalance(retryResponse.headers.get('x-credit-balance'))
         if (retryBalance !== null) {
-          deps.credentialStore.updateBalance(origin, retryBalance)
+          deps.credentialStore.updateBalance(credKey, retryBalance)
         }
 
         const retryBody = await retryResponse.text()
@@ -309,6 +313,7 @@ export function registerFetchTool(server: McpServer, deps: FetchDeps): void {
         headers: z.record(z.string().max(1000), z.string().max(8000)).optional().describe('Additional request headers'),
         body: z.string().max(1_000_000).optional().describe('Request body (for POST/PUT)'),
         autoPay: z.boolean().optional().default(false).describe('Automatically pay if within MAX_AUTO_PAY_SATS budget'),
+        pubkey: z.string().max(128).optional().describe('Service pubkey from l402_search results — used to share credentials across all transport URLs for the same service'),
       },
     },
     async (args) => handleFetch(args, deps),
