@@ -60,6 +60,14 @@ TRANSPORT=http PORT=3402 node build/index.js
 
 Set `SSRF_ALLOW_PRIVATE=true` when testing against localhost services.
 
+## What reviewers look for
+
+- **Atomic spend tracking** — always use `spendTracker.tryRecord(sats, limit)`, never split `wouldExceed()` + `record()` (TOCTOU race condition)
+- **Preimage validation** — validate hex format and length (64 chars) before storing. Preimages are sent raw in `Authorization` headers
+- **SSRF guard** — all outbound HTTP must go through resilient fetch. Money-mutating POSTs pass `{ retries: 0 }` to disable retry
+- **Error sanitisation** — never expose internal details (file paths, stack traces, NWC secrets) in tool responses
+- **Zod validation** — all tool inputs validated with Zod schemas at the registration layer
+
 ## Pull requests
 
 1. Fork and create a feature branch

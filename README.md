@@ -143,10 +143,10 @@ Browse live L402 services at [402.pub](https://402.pub) — the decentralised ma
 | **[402-mcp](https://github.com/TheCryptoDonkey/402-mcp)** | **MCP client — AI agents discover, pay, and consume L402 + x402 APIs** |
 | [402-announce](https://github.com/TheCryptoDonkey/402-announce) | Publish L402 services on Nostr for decentralised discovery |
 
-<details>
-<summary>How does this compare to alternatives?</summary>
+402-mcp is the **payment-rail agnostic** alternative to Lightning Labs' [lightning-agent-tools](https://github.com/lightninglabs/lightning-agent-tools) and Coinbase's x402 — no Lightning node required, multiple wallets, encrypted credentials.
 
-The L402 ecosystem is growing fast — Lightning Labs' [lightning-agent-tools](https://github.com/lightninglabs/lightning-agent-tools), Coinbase's x402, and others. 402-mcp is the **payment-rail agnostic** alternative:
+<details>
+<summary>Full comparison</summary>
 
 | | 402-mcp | Lightning Labs agent tools |
 |---|---|---|
