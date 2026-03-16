@@ -380,6 +380,39 @@ describe('handleBuyCredits', () => {
     expect(payInvoice).not.toHaveBeenCalled()
   })
 
+  it('allows human wallet to bypass maxAutoPaySats for manual payment', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        bolt11: 'lnbc5000n1test',
+        macaroon: 'mac456',
+        credit_sats: 5500,
+      }),
+    })
+
+    const payInvoice = vi.fn().mockResolvedValue({ paid: false, method: 'human', reason: 'timed out' })
+
+    const result = await handleBuyCredits(
+      { url: 'https://api.example.com/data', amountSats: 5000, method: 'human' },
+      {
+        fetchFn: mockFetch as unknown as typeof fetch,
+        payInvoice,
+        storeCredential: vi.fn(),
+        decodeBolt11: vi.fn().mockReturnValue({ costSats: 5000, paymentHash: 'a'.repeat(64), expiry: 3600 }),
+        maxAutoPaySats: 1000, // Cap is 1000 but human wallet should bypass it
+        maxSpendPerMinuteSats: 10000,
+        spendTracker: new SpendTracker(),
+        generateQr: vi.fn().mockResolvedValue({ png: 'data:image/png;base64,QRDATA', text: '█▀▀█' }),
+        walletMethod: () => 'human',
+      },
+    )
+
+    // Should reach the QR flow, not be blocked by maxAutoPaySats
+    expect(payInvoice).toHaveBeenCalled()
+    expect(result.content[0].text).toContain('█▀▀█')
+  })
+
   it('returns QR image on human wallet timeout', async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,

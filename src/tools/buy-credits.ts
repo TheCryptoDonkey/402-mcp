@@ -110,8 +110,11 @@ export async function handleBuyCredits(
       }
     }
 
-    // Per-request cap — consistent with l402_fetch and l402_redeem_cashu
-    if (decoded.costSats > deps.maxAutoPaySats) {
+    // Per-request cap — consistent with l402_fetch and l402_redeem_cashu.
+    // Skip for human wallet: the user approves manually via QR, so the auto-pay cap
+    // should not block their explicit choice to buy a larger tier.
+    const effectiveMethod = args.method ?? deps.walletMethod()
+    if (effectiveMethod !== 'human' && decoded.costSats > deps.maxAutoPaySats) {
       return {
         content: [{
           type: 'text' as const,

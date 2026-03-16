@@ -187,6 +187,13 @@ describe('resolveHns', () => {
       const result = await resolveHns('good.hns', 'https://query.hdns.io/')
       expect(result).toEqual({ address: '2606:2800:220:1:248:1893:25c8:1946', family: 6 })
     })
+
+    it('accepts IPv6 mixed notation (RFC 4291)', async () => {
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({}), { status: 200 }))
+      mockFetch.mockResolvedValueOnce(dnsResponse([{ type: 28, data: '::ffff:93.184.216.34' }]))
+      const result = await resolveHns('mixed.hns', 'https://query.hdns.io/')
+      expect(result).toEqual({ address: '::ffff:93.184.216.34', family: 6 })
+    })
   })
 
   describe('gateway redirect protection', () => {

@@ -5,8 +5,8 @@ export interface ResolvedAddress {
 
 // Strict IPv4: exactly four decimal octets 0-255 (rejects octal, hex, shorthand)
 const IPV4_RE = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/
-// IPv6: hex digits and colons only (simplified check — full validation happens in isBlockedIp)
-const IPV6_RE = /^[0-9a-fA-F:]+$/
+// IPv6: hex digits, colons, and dots (dots appear in mixed notation like ::ffff:93.184.216.34)
+const IPV6_RE = /^[0-9a-fA-F:.]+$/
 
 function isValidIpFormat(address: string, family: 4 | 6): boolean {
   if (family === 4) {

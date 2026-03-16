@@ -275,8 +275,11 @@ describe('L402 integration flow', () => {
         payInvoice: async () => ({ paid: false, method: 'none' }),
         storeCredential: () => {},
         decodeBolt11,
+        maxAutoPaySats: 10000,
         maxSpendPerMinuteSats: 10000,
         spendTracker: new SpendTracker(),
+        generateQr: async () => ({ png: 'data:image/png;base64,test', text: '█▀▀█' }),
+        walletMethod: () => undefined,
       },
     )
 
