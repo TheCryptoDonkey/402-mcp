@@ -24,6 +24,9 @@ function makeDeps(overrides: Partial<FetchDeps> = {}): FetchDeps {
     challengeCache: new ChallengeCache(),
     generateQr: vi.fn().mockResolvedValue({ png: 'data:image/png;base64,iVBORtestdata', text: '█▀▀▀█\n█   █\n█▄▄▄█' }),
     walletMethod: () => undefined,
+    isX402: vi.fn().mockReturnValue(false),
+    parseX402: vi.fn().mockReturnValue(null),
+    formatX402: vi.fn().mockReturnValue({ json: {}, message: '' }),
     ...overrides,
   }
 }
@@ -537,6 +540,135 @@ describe('handleFetch', () => {
 
       // Credential key should be origin of first (primary) URL
       expect(credGet).toHaveBeenCalledWith('https://a.example.com')
+    })
+  })
+
+  describe('x402 challenge detection', () => {
+    const x402Body = JSON.stringify({
+      x402: {
+        receiver: '0x1234567890abcdef1234567890abcdef12345678',
+        network: 'base',
+        asset: 'usdc',
+        amount_usd: 1,
+      },
+    })
+
+    it('returns x402 payment details when X-Payment-Required: x402 header is present', async () => {
+      const formattedJson = {
+        status: 402,
+        protocol: 'x402',
+        receiver: '0x1234567890abcdef1234567890abcdef12345678',
+        network: 'base',
+        asset: 'USDC',
+        amountUsd: 1,
+        chainId: 8453,
+        paymentDeeplink: 'ethereum:0x1234567890abcdef1234567890abcdef12345678@8453',
+        message: 'Payment required: $1 USDC on base.',
+      }
+
+      const deps = makeDeps({
+        fetchFn: vi.fn().mockResolvedValue(mockResponse(402, {
+          'x-payment-required': 'x402',
+        }, x402Body)) as unknown as typeof fetch,
+        isX402: vi.fn().mockReturnValue(true),
+        parseX402: vi.fn().mockReturnValue({
+          receiver: '0x1234567890abcdef1234567890abcdef12345678',
+          network: 'base',
+          asset: 'usdc',
+          amountUsd: 1,
+          chainId: 8453,
+          amountSmallestUnit: 1000000n,
+        }),
+        formatX402: vi.fn().mockReturnValue({ json: formattedJson, message: formattedJson.message }),
+      })
+
+      const result = await handleFetch({ url: 'https://api.example.com/data' }, deps)
+      const parsed = JSON.parse(result.content[0].text)
+
+      expect(parsed.status).toBe(402)
+      expect(parsed.protocol).toBe('x402')
+      expect(parsed.receiver).toBe('0x1234567890abcdef1234567890abcdef12345678')
+      expect(parsed.network).toBe('base')
+      expect(parsed.asset).toBe('USDC')
+      expect(parsed.amountUsd).toBe(1)
+      expect(parsed.paymentDeeplink).toContain('ethereum:')
+      expect(parsed.message).toContain('Payment required')
+
+      // Should NOT attempt L402 payment
+      expect(deps.payInvoice).not.toHaveBeenCalled()
+    })
+
+    it('falls through to L402 when x402 header present but body is unparseable', async () => {
+      const deps = makeDeps({
+        fetchFn: vi.fn().mockResolvedValue(mockResponse(402, {
+          'x-payment-required': 'x402',
+          'www-authenticate': 'L402 macaroon="mac1", invoice="lnbc10n1test"',
+        }, '{}')) as unknown as typeof fetch,
+        isX402: vi.fn().mockReturnValue(true),
+        parseX402: vi.fn().mockReturnValue(null),
+        parseL402: vi.fn().mockReturnValue({ macaroon: 'mac1', invoice: 'lnbc10n1test' }),
+        decodeBolt11: vi.fn().mockReturnValue({ costSats: 10, paymentHash: 'hash1', expiry: 3600 }),
+      })
+
+      const result = await handleFetch({ url: 'https://api.example.com/data' }, deps)
+      const parsed = JSON.parse(result.content[0].text)
+
+      // Should fall through to L402 path
+      expect(parsed.status).toBe(402)
+      expect(parsed.costSats).toBe(10)
+      expect(parsed.invoice).toBe('lnbc10n1test')
+    })
+
+    it('does not check x402 when isX402 returns false', async () => {
+      const deps = makeDeps({
+        fetchFn: vi.fn().mockResolvedValue(mockResponse(402, {
+          'www-authenticate': 'L402 macaroon="mac1", invoice="lnbc10n1test"',
+        }, '{}')) as unknown as typeof fetch,
+        isX402: vi.fn().mockReturnValue(false),
+        parseX402: vi.fn(),
+        parseL402: vi.fn().mockReturnValue({ macaroon: 'mac1', invoice: 'lnbc10n1test' }),
+        decodeBolt11: vi.fn().mockReturnValue({ costSats: 10, paymentHash: 'hash1', expiry: 3600 }),
+      })
+
+      const result = await handleFetch({ url: 'https://api.example.com/data' }, deps)
+      const parsed = JSON.parse(result.content[0].text)
+
+      expect(parsed.status).toBe(402)
+      expect(parsed.costSats).toBe(10)
+      // parseX402 should not have been called
+      expect(deps.parseX402).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('x402 txHash retry', () => {
+    it('sends X-Payment header when txHash is provided', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(mockResponse(200, {}, 'access granted'))
+      const txHash = '0x' + 'a'.repeat(64)
+
+      const deps = makeDeps({
+        fetchFn: fetchMock as unknown as typeof fetch,
+      })
+
+      const result = await handleFetch({ url: 'https://api.example.com/data', txHash }, deps)
+
+      const callHeaders = fetchMock.mock.calls[0][1].headers
+      expect(callHeaders['X-Payment']).toBe(txHash)
+
+      const parsed = JSON.parse(result.content[0].text)
+      expect(parsed.status).toBe(200)
+      expect(parsed.body).toBe('access granted')
+    })
+
+    it('does not set X-Payment header when txHash is absent', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(mockResponse(200, {}, 'OK'))
+      const deps = makeDeps({
+        fetchFn: fetchMock as unknown as typeof fetch,
+      })
+
+      await handleFetch({ url: 'https://api.example.com/data' }, deps)
+
+      const callHeaders = fetchMock.mock.calls[0][1].headers
+      expect(callHeaders['X-Payment']).toBeUndefined()
     })
   })
 })

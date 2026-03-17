@@ -52,6 +52,7 @@ src/
   wallet/               # Payment implementations (NWC, Cashu melt, human)
   store/                # Persistent JSON stores (credentials, Cashu tokens)
   l402/                 # L402 protocol utilities (parse, detect, cache, bolt11)
+  x402/                 # x402 protocol utilities (parse, payment deeplinks)
 tests/                  # Tests mirror src/ structure (tests/tools/, tests/wallet/, etc.)
   e2e/                  # Integration tests against in-process toll-booth
 ```

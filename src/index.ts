@@ -25,6 +25,8 @@ import { registerBuyCreditsTool } from './tools/buy-credits.js'
 import { registerRedeemCashuTool } from './tools/redeem-cashu.js'
 import { registerSearchTool } from './tools/search.js'
 import { createNostrSubscriber } from './tools/nostr-subscribe.js'
+import { isX402Challenge, parseX402Challenge } from './x402/parse.js'
+import { formatX402PaymentRequest } from './x402/payment.js'
 import { createResilientFetch, withTransportFallback } from './fetch/resilient-fetch.js'
 import { selectTransports } from './fetch/transport.js'
 import { resolveHns as resolveHnsBase } from './fetch/hns-resolve.js'
@@ -180,6 +182,9 @@ registerFetchTool(server, {
   challengeCache,
   generateQr,
   walletMethod: () => getWallet()?.method,
+  isX402: isX402Challenge,
+  parseX402: parseX402Challenge,
+  formatX402: formatX402PaymentRequest,
 })
 
 registerPayTool(server, {

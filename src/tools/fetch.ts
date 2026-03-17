@@ -8,6 +8,7 @@ import type { ResilientFetchOptions } from '../fetch/resilient-fetch.js'
 import type { SpendTracker } from '../spend-tracker.js'
 import type { ChallengeCache } from '../l402/challenge-cache.js'
 import type { WalletMethod } from '../wallet/types.js'
+import type { X402Challenge } from '../x402/parse.js'
 import { safeErrorMessage } from './safe-error.js'
 import { filterResponseHeaders } from './safe-headers.js'
 
@@ -35,6 +36,12 @@ export interface FetchDeps {
   challengeCache: ChallengeCache
   generateQr: (invoice: string) => Promise<{ png: string; text: string }>
   walletMethod: () => WalletMethod | undefined
+  /** Detects x402 challenge from response headers. */
+  isX402: (headers: Headers) => boolean
+  /** Parses x402 challenge details from the response body. */
+  parseX402: (body: unknown) => X402Challenge | null
+  /** Formats x402 challenge as a payment request for the agent. */
+  formatX402: (challenge: X402Challenge) => { json: Record<string, unknown>; message: string }
 }
 
 function parseBalance(value: string | null): number | null {
@@ -43,9 +50,9 @@ function parseBalance(value: string | null): number | null {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null
 }
 
-/** Makes an HTTP request with automatic L402 payment and credential reuse. Pays the invoice if within budget, stores the credential, and retries. */
+/** Makes an HTTP request with automatic L402/x402 payment and credential reuse. Pays the invoice if within budget, stores the credential, and retries. */
 export async function handleFetch(
-  args: { url: string; urls?: string[]; method?: string; headers?: Record<string, string>; body?: string; autoPay?: boolean; pubkey?: string },
+  args: { url: string; urls?: string[]; method?: string; headers?: Record<string, string>; body?: string; autoPay?: boolean; pubkey?: string; txHash?: string },
   deps: FetchDeps,
 ) {
   // When multiple URLs are provided (from l402_search results), use transport fallback.
@@ -71,6 +78,13 @@ export async function handleFetch(
   if (cred) {
     reqHeaders['Authorization'] = `L402 ${cred.macaroon}:${cred.preimage}`
     deps.credentialStore.updateLastUsed(credKey)
+  }
+
+  // x402 retry: when the caller provides a transaction hash from a completed
+  // on-chain payment, attach it as the X-Payment header so the server can
+  // verify and grant access.
+  if (args.txHash) {
+    reqHeaders['X-Payment'] = args.txHash
   }
 
   // Build a unified fetch helper: multi-URL (transport fallback) or single-URL
@@ -111,12 +125,28 @@ export async function handleFetch(
       }
     }
 
-    // 402 response - parse the challenge
-    const authHeader = response.headers.get('www-authenticate') ?? ''
-    const challenge = deps.parseL402(authHeader)
-
+    // 402 response - parse the challenge body (shared by L402 and x402 paths)
     let challengeBody: Record<string, unknown> = {}
     try { challengeBody = await response.json() as Record<string, unknown> } catch { /* non-JSON 402 body */ }
+
+    // x402 challenge: on-chain stablecoin payment (human-in-the-loop)
+    if (deps.isX402(response.headers)) {
+      const x402 = deps.parseX402(challengeBody)
+      if (x402) {
+        const { json } = deps.formatX402(x402)
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify(json, null, 2),
+          }],
+        }
+      }
+      // Header said x402 but body was unparseable — fall through to generic 402
+    }
+
+    // L402 challenge: Lightning payment
+    const authHeader = response.headers.get('www-authenticate') ?? ''
+    const challenge = deps.parseL402(authHeader)
 
     const decoded = challenge ? deps.decodeBolt11(challenge.invoice) : { costSats: null, paymentHash: null, expiry: 3600 }
     const serverInfo = deps.detectServer(response.headers, challengeBody)
@@ -320,7 +350,7 @@ export function registerFetchTool(server: McpServer, deps: FetchDeps): void {
   server.registerTool(
     'l402_fetch',
     {
-      description: 'Fetch a URL with automatic payment handling. Use this to access any paid API or service. Manages credentials, pays automatically when autoPay is true and cost is within budget, and retries. For human wallets, returns a payment page URL or QR code. Set autoPay to true for seamless access. When a 402 is returned with tiers, present the pricing options to the user and use l402_buy_credits to purchase their chosen tier.',
+      description: 'Fetch a URL with automatic payment handling (L402 Lightning + x402 on-chain). Manages credentials, pays automatically when autoPay is true and cost is within budget, and retries. For human wallets, returns a payment page URL or QR code. For x402 services, returns payment details (receiver address, network, asset, amount) — the user pays in their wallet and provides the transaction hash. Set autoPay to true for seamless access. When a 402 is returned with tiers, present the pricing options to the user and use l402_buy_credits to purchase their chosen tier.',
       inputSchema: {
         url: z.url().describe('The primary URL to request. When using search results, pass the first URL here and all URLs in the urls field.'),
         urls: z.array(z.url()).max(10).optional().describe('All transport URLs from l402_search results (clearnet, onion, HNS). When present, transports are tried in preference order with automatic fallback on connection failure.'),
@@ -329,6 +359,7 @@ export function registerFetchTool(server: McpServer, deps: FetchDeps): void {
         body: z.string().max(1_000_000).optional().describe('Request body (for POST/PUT)'),
         autoPay: z.boolean().optional().default(false).describe('Automatically pay if within MAX_AUTO_PAY_SATS budget'),
         pubkey: z.string().max(128).optional().describe('Service pubkey from l402_search results — used to share credentials across all transport URLs for the same service'),
+        txHash: z.string().regex(/^0x[0-9a-fA-F]{64}$/).optional().describe('Transaction hash from a completed x402 on-chain payment. When provided, retries the request with X-Payment header for server verification.'),
       },
     },
     async (args) => handleFetch(args, deps),

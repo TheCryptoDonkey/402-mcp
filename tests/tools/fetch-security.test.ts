@@ -13,6 +13,7 @@ function makeDeps(overrides: Partial<FetchDeps> = {}): FetchDeps {
       updateLastUsed: vi.fn(),
     } as unknown as FetchDeps['credentialStore'],
     fetchFn: vi.fn() as unknown as typeof fetch,
+    transportFetch: vi.fn() as unknown as FetchDeps['transportFetch'],
     payInvoice: vi.fn().mockResolvedValue({ paid: false, method: 'none' }),
     maxAutoPaySats: 100,
     maxSpendPerMinuteSats: 10000,
@@ -23,6 +24,9 @@ function makeDeps(overrides: Partial<FetchDeps> = {}): FetchDeps {
     challengeCache: new ChallengeCache(),
     generateQr: vi.fn().mockResolvedValue({ png: 'data:image/png;base64,test', text: '█▀▀█' }),
     walletMethod: () => undefined,
+    isX402: vi.fn().mockReturnValue(false),
+    parseX402: vi.fn().mockReturnValue(null),
+    formatX402: vi.fn().mockReturnValue({ json: {}, message: '' }),
     ...overrides,
   }
 }
