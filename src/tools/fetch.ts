@@ -9,6 +9,7 @@ import type { SpendTracker } from '../spend-tracker.js'
 import type { ChallengeCache } from '../l402/challenge-cache.js'
 import type { WalletMethod } from '../wallet/types.js'
 import type { X402Challenge } from '../x402/parse.js'
+import type { XCashuChallenge } from '../xcashu/parse.js'
 import { safeErrorMessage } from './safe-error.js'
 import { filterResponseHeaders } from './safe-headers.js'
 
@@ -42,6 +43,12 @@ export interface FetchDeps {
   parseX402: (body: unknown) => X402Challenge | null
   /** Formats x402 challenge as a payment request for the agent. */
   formatX402: (challenge: X402Challenge) => { json: Record<string, unknown>; message: string }
+  /** Detects xcashu challenge from response headers. */
+  isXCashu: (headers: Headers) => boolean
+  /** Parses xcashu challenge from X-Cashu header value. */
+  parseXCashu: (header: string) => XCashuChallenge | null
+  /** Attempts xcashu payment. Returns cashuB token header or null. */
+  payXCashu: (challenge: XCashuChallenge) => Promise<{ header: string; amountSats: number } | null>
 }
 
 function parseBalance(value: string | null): number | null {
@@ -128,6 +135,49 @@ export async function handleFetch(
     // 402 response - parse the challenge body (shared by L402 and x402 paths)
     let challengeBody: Record<string, unknown> = {}
     try { challengeBody = await response.json() as Record<string, unknown> } catch { /* non-JSON 402 body */ }
+
+    // xcashu challenge: direct Cashu ecash payment (cheapest, fastest)
+    const xcashuHeader = response.headers.get('x-cashu')
+    if (xcashuHeader && deps.isXCashu(response.headers)) {
+      const xcashuChallenge = deps.parseXCashu(xcashuHeader)
+      if (xcashuChallenge) {
+        const xcashuAutoPay = args.autoPay ?? false
+        if (xcashuAutoPay && xcashuChallenge.amount <= deps.maxAutoPaySats) {
+          const xcashuWithinLimit = deps.spendTracker.tryRecord(xcashuChallenge.amount, deps.maxSpendPerMinuteSats)
+          if (xcashuWithinLimit) {
+            const xcashuResult = await deps.payXCashu(xcashuChallenge)
+            if (xcashuResult) {
+              const retryHeaders: Record<string, string> = { ...reqHeaders }
+              retryHeaders['X-Cashu'] = xcashuResult.header
+
+              const retryResponse = await doFetch(primaryUrl, {
+                method: args.method ?? 'GET',
+                headers: retryHeaders,
+                body: args.body,
+              })
+
+              const retryBalance = parseBalance(retryResponse.headers.get('x-credit-balance'))
+              const retryBody = await retryResponse.text()
+              return {
+                content: [{
+                  type: 'text' as const,
+                  text: JSON.stringify({
+                    status: retryResponse.status,
+                    headers: filterResponseHeaders(retryResponse.headers),
+                    body: retryBody,
+                    creditsRemaining: retryBalance,
+                    satsPaid: xcashuResult.amountSats,
+                    paymentMethod: 'xcashu',
+                  }, null, 2),
+                }],
+              }
+            }
+            // xcashu payment failed — unrecord spend, fall through to L402
+            deps.spendTracker.unrecord(xcashuChallenge.amount)
+          }
+        }
+      }
+    }
 
     // x402 challenge: on-chain stablecoin payment (human-in-the-loop)
     if (deps.isX402(response.headers)) {

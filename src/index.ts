@@ -27,6 +27,8 @@ import { registerSearchTool } from './tools/search.js'
 import { createNostrSubscriber } from './tools/nostr-subscribe.js'
 import { isX402Challenge, parseX402Challenge } from './x402/parse.js'
 import { formatX402PaymentRequest } from './x402/payment.js'
+import { isXCashuChallenge, parseXCashuChallenge } from './xcashu/parse.js'
+import { attemptXCashuPayment } from './xcashu/payment.js'
 import { createResilientFetch, withTransportFallback } from './fetch/resilient-fetch.js'
 import { selectTransports } from './fetch/transport.js'
 import { resolveHns as resolveHnsBase } from './fetch/hns-resolve.js'
@@ -185,6 +187,11 @@ registerFetchTool(server, {
   isX402: isX402Challenge,
   parseX402: parseX402Challenge,
   formatX402: formatX402PaymentRequest,
+  isXCashu: isXCashuChallenge,
+  parseXCashu: parseXCashuChallenge,
+  payXCashu: cashuTokenStore
+    ? (challenge) => attemptXCashuPayment({ challenge, tokenStore: cashuTokenStore })
+    : async () => null,
 })
 
 registerPayTool(server, {
