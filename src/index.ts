@@ -69,8 +69,17 @@ if (config.nwcUri) {
   walletProviders.push(createNwcWallet(config.nwcUri))
 }
 
+// Shared lock for all Cashu token store operations (melt + xcashu)
+// Prevents concurrent token consumption races.
+let cashuLock: Promise<unknown> = Promise.resolve()
+function withCashuLock<T>(fn: () => Promise<T>): Promise<T> {
+  const result = cashuLock.catch(() => {}).then(() => fn())
+  cashuLock = result.catch(() => {})
+  return result
+}
+
 if (cashuTokenStore) {
-  walletProviders.push(createCashuWallet(cashuTokenStore))
+  walletProviders.push(createCashuWallet(cashuTokenStore, withCashuLock))
 }
 
 // QR generation for human-in-the-loop (text for terminals, PNG for GUI clients)
@@ -190,7 +199,7 @@ registerFetchTool(server, {
   isXCashu: isXCashuChallenge,
   parseXCashu: parseXCashuChallenge,
   payXCashu: cashuTokenStore
-    ? (challenge) => attemptXCashuPayment({ challenge, tokenStore: cashuTokenStore })
+    ? (challenge) => withCashuLock(() => attemptXCashuPayment({ challenge, tokenStore: cashuTokenStore }))
     : async () => null,
 })
 

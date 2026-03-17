@@ -100,9 +100,18 @@ async function doPayInvoice(invoice: string, tokenStore: CashuTokenStore, _optio
 }
 
 /** Creates a Cashu wallet provider that melts ecash tokens to pay Lightning invoices. */
-export function createCashuWallet(tokenStore: CashuTokenStore): WalletProvider {
-  // Serialise payment attempts to prevent concurrent token consumption races
-  let paymentLock: Promise<PaymentResult> = Promise.resolve({ paid: false, method: 'cashu' })
+export function createCashuWallet(
+  tokenStore: CashuTokenStore,
+  lock?: <T>(fn: () => Promise<T>) => Promise<T>,
+): WalletProvider {
+  // Use external lock if provided (shared with xcashu path), otherwise internal
+  let internalLock: Promise<unknown> = Promise.resolve()
+  const defaultLock = <T>(fn: () => Promise<T>): Promise<T> => {
+    const result = internalLock.catch(() => {}).then(() => fn())
+    internalLock = result.catch(() => {})
+    return result
+  }
+  const withLock = lock ?? defaultLock
 
   return {
     method: 'cashu',
@@ -111,10 +120,7 @@ export function createCashuWallet(tokenStore: CashuTokenStore): WalletProvider {
     },
 
     payInvoice(invoice: string, options?: PayInvoiceOptions): Promise<PaymentResult> {
-      paymentLock = paymentLock
-        .catch(() => {})  // never let a prior rejection block the chain
-        .then(() => doPayInvoice(invoice, tokenStore, options))
-      return paymentLock
+      return withLock(() => doPayInvoice(invoice, tokenStore, options))
     },
   }
 }
