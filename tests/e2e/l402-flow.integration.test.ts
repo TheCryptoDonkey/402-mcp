@@ -13,6 +13,8 @@ import { parseL402Challenge } from '../../src/l402/parse.js'
 import { detectServer } from '../../src/l402/detect.js'
 import { CredentialStore } from '../../src/store/credentials.js'
 import { SpendTracker } from '../../src/spend-tracker.js'
+import { isX402Challenge, parseX402Challenge } from '../../src/x402/parse.js'
+import { formatX402PaymentRequest } from '../../src/x402/payment.js'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomBytes } from 'node:crypto'
@@ -126,6 +128,10 @@ describe('L402 integration flow', () => {
         challengeCache: new ChallengeCache(),
         generateQr: async () => ({ png: 'data:image/png;base64,test', text: '█▀▀█' }),
         walletMethod: () => undefined,
+        transportFetch: async (urls, init) => resilientFetch(urls[0], init),
+        isX402: isX402Challenge,
+        parseX402: parseX402Challenge,
+        formatX402: formatX402PaymentRequest,
       },
     )
 
@@ -189,6 +195,10 @@ describe('L402 integration flow', () => {
         challengeCache: new ChallengeCache(),
         generateQr: async () => ({ png: 'data:image/png;base64,test', text: '█▀▀█' }),
         walletMethod: () => undefined,
+        transportFetch: async (urls, init) => resilientFetch(urls[0], init),
+        isX402: isX402Challenge,
+        parseX402: parseX402Challenge,
+        formatX402: formatX402PaymentRequest,
       },
     )
 
@@ -243,6 +253,10 @@ describe('L402 integration flow', () => {
       challengeCache: new ChallengeCache(),
       generateQr: async () => ({ png: 'data:image/png;base64,test', text: '█▀▀█' }),
       walletMethod: () => undefined,
+      transportFetch: async (urls, init) => resilientFetch(urls[0], init),
+      isX402: isX402Challenge,
+      parseX402: parseX402Challenge,
+      formatX402: formatX402PaymentRequest,
     }
 
     // Use up all 110 credits (each request costs 1 sat per defaultInvoiceAmount)
