@@ -29,7 +29,7 @@
     "prepublishOnly": "npm run typecheck && npm run build && npm test -- --exclude 'tests/e2e/l402-flow.integration.test.ts'"
   },
   "dependencies": {
-    "@cashu/cashu-ts": "^3.5.0",
+    "@cashu/cashu-ts": "^3.6.1",
     "@modelcontextprotocol/sdk": "^1.26.0",
     "bolt11": "^1.4.1",
     "cors": "^2.8.5",
@@ -43,19 +43,19 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@forgesworn/toll-booth": "file:../toll-booth",
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/git": "^10.0.1",
     "@semantic-release/github": "^12.0.6",
-    "@forgesworn/toll-booth": "file:../toll-booth",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
-    "@types/node": "^25.4.0",
+    "@types/node": "^24.12.0",
     "@types/qrcode": "^1.5.5",
     "@vitest/coverage-v8": "^4.1.0",
     "eslint": "^10.0.3",
     "semantic-release": "^25.0.3",
     "typescript": "^5.7.0",
-    "typescript-eslint": "^8.57.0",
+    "typescript-eslint": "^8.57.1",
     "vitest": "^4.0.18"
   },
   "keywords": [
