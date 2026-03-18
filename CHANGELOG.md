@@ -1,3 +1,10 @@
+## [3.13.1](https://github.com/forgesworn/402-mcp/compare/v3.13.0...v3.13.1) (2026-03-18)
+
+
+### Bug Fixes
+
+* use dynamic dates in credential store tests to avoid TTL expiry ([8030e4e](https://github.com/forgesworn/402-mcp/commit/8030e4eac7a25b46f19905c736c323aa2e999cc2))
+
 # [3.13.0](https://github.com/TheCryptoDonkey/402-mcp/compare/v3.12.0...v3.13.0) (2026-03-17)
 
 
