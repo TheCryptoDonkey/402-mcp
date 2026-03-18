@@ -14,7 +14,7 @@ describe('handleBalance', () => {
     store = new CredentialStore(join(dir, 'credentials.json'))
     store.set('https://a.com', {
       macaroon: 'mac1', preimage: 'pre1', paymentHash: 'h1',
-      creditBalance: 100, storedAt: '2026-03-11T10:00:00Z',
+      creditBalance: 100, storedAt: new Date().toISOString(),
       lastUsed: new Date().toISOString(), server: 'toll-booth',
     })
   })

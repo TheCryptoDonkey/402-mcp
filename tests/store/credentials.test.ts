@@ -32,13 +32,14 @@ describe('CredentialStore', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
+  const now = new Date().toISOString()
   const cred: StoredCredential = {
     macaroon: 'mac123',
     preimage: 'pre123',
     paymentHash: 'hash123',
     creditBalance: 100,
-    storedAt: '2026-03-11T10:00:00Z',
-    lastUsed: '2026-03-11T10:00:00Z',
+    storedAt: now,
+    lastUsed: now,
     server: 'toll-booth',
   }
 
